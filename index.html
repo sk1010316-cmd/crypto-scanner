@@ -196,9 +196,9 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
       <div class="note">R = 以止損距離為單位的損益（−1R 就是剛好打到止損）。止損止盈依「模擬進場價」重新計算。平均 R 大於 0 才代表這套計畫長期有正期望值；帳戶影響 = 平均 R × 每筆風險 %。</div>
     </div>
     <div class="panel" style="margin-top:14px">
-      <div class="ph"><h2>進階統計（4 小時結果，依順／逆大盤分開）</h2><small>判斷大盤濾網有沒有用</small></div>
+      <div class="ph"><h2>進階統計（4 小時結果，依 BTC 大盤狀態分開）</h2><small>判斷大盤濾網有沒有用</small></div>
       <div class="twrap"><table id="advTable"></table></div>
-      <div class="note">獲利因子 = 總獲利 ÷ 總虧損（&gt;1 才賺）。最大回撤 = 依時間順序把每筆報酬加總後，從高點到低點的最大跌幅。最大順向／逆向（MFE／MAE）= 持有 4 小時內曾經最多賺／最多虧多少：順向常常很大但最後沒賺到 → 出場太晚；逆向常常很大 → 進場太早或止損太近。「順大盤」明顯比「逆大盤」好，大盤濾網才值得真的擋掉訊號。</div>
+      <div class="note">獲利因子 = 總獲利 ÷ 總虧損（&gt;1 才賺）。最大回撤 = 依時間順序把每筆報酬加總後，從高點到低點的最大跌幅。最大順向／逆向（MFE／MAE）= 持有 4 小時內曾經最多賺／最多虧多少：順向常常很大但最後沒賺到 → 出場太晚；逆向常常很大 → 進場太早或止損太近。MFE／MAE 依 5 分 K 最高最低價估算，同一根 K 棒內先漲還是先跌無法確認。大盤分類：順大盤＝訊號方向和 BTC 趨勢相同；逆大盤＝相反；BTC盤整、BTC高波動另外統計。「順大盤」明顯比其他類好，大盤濾網才值得真的擋掉訊號。建議每組至少 50 筆再初步判斷，優先看期望值、獲利因子、最大回撤，不要只看勝率。</div>
     </div>
     <div class="panel" style="margin-top:14px">
       <div class="ph"><h2>時段分析</h2><small>4 小時平均淨報酬</small></div>
@@ -720,19 +720,27 @@ function renderRegime(){
   if (!regime){ el.innerHTML = '<span class="mute">BTC 大盤狀態讀取失敗，訊號暫不標示順逆</span>'; return; }
   const R = regime, T = {up: '多頭趨勢 ↑', down: '空頭趨勢 ↓', range: '盤整震盪 ↔'};
   const hint = PAGE === 'rev'
-    ? (R.hv ? '波動劇烈：所有反轉訊號都標 ⚠' : R.trend === 'up' ? '做空推薦與大盤相反，會標 ⚠' : R.trend === 'down' ? '做多推薦與大盤相反，會標 ⚠' : '盤整：反轉策略較適合的環境')
+    ? (R.hv ? '波動劇烈：反轉（逆勢）訊號容易被趨勢延續打掉，所有訊號標 ⚠ 且預設不推 Telegram' : R.trend === 'up' ? '做空推薦與大盤相反，會標 ⚠' : R.trend === 'down' ? '做多推薦與大盤相反，會標 ⚠' : '盤整：反轉策略較適合的環境')
     : (R.trend === 'up' ? '做空訊號與大盤相反，會標 ⚠' : R.trend === 'down' ? '做多訊號與大盤相反，會標 ⚠' : '盤整：追價風險高，所有訊號標 ⚠');
   el.innerHTML = `<b>BTC 大盤（1 小時 K）：<span class="${R.trend}">${T[R.trend]}</span></b>${R.hv ? ' <span class="wrn">⚠ 波動劇烈</span>' : ''}
     <span class="mute num">｜EMA20 ${fmtPx(R.e20)} / EMA50 ${fmtPx(R.e50)}｜ADX ${R.adx.toFixed(0)}｜波動 ${R.atrRatio.toFixed(1)}× 平常</span>
     <br>${hint}。⚠ 只是標示，不會擋掉訊號；回顧統計會把順／逆大盤分開，用實際結果判斷濾網有沒有用。`;
 }
 
+// 依訊號當下記錄的 BTC 狀態分類（之前的紀錄也適用）
+function regCat(side, reg){
+  if (!reg) return '未標記';
+  if (reg.includes('+hv')) return 'BTC高波動';
+  if (reg.startsWith('range')) return 'BTC盤整';
+  return (side === 'long') === reg.startsWith('up') ? '順大盤' : '逆大盤';
+}
+const CAT_ORDER = {'順大盤': 0, '逆大盤': 1, 'BTC盤整': 2, 'BTC高波動': 3, '未標記': 4};
 // ---------- 進階統計（4 小時結果） ----------
 function renderAdv(){
   const g = {}, hb = {};
   for (const a of [...alerts].reverse()){                 // 依時間先後
     if (a.e4 == null) continue;
-    const al = a.reg == null ? '未標記' : (a.warn ? '逆大盤' : '順大盤');
+    const al = regCat(a.side, a.reg);
     const k = `${a.kind}|${a.side}|${al}`;
     const G = (g[k] ||= {kind: a.kind, side: a.side, al, v: [], mfe: [], mae: [], r: []});
     G.v.push(a.e4); if (a.mfe != null){ G.mfe.push(a.mfe); G.mae.push(a.mae); } if (a.po) G.r.push(a.po.r);
@@ -740,7 +748,7 @@ function renderAdv(){
     (hb[hk] ||= []).push(a.e4);
   }
   const avg = v => v.length ? sum(v) / v.length : NaN;
-  const list = Object.values(g).sort((a, b) => (a.kind + a.side + a.al).localeCompare(b.kind + b.side + b.al));
+  const list = Object.values(g).sort((a, b) => (a.kind + a.side).localeCompare(b.kind + b.side) || CAT_ORDER[a.al] - CAT_ORDER[b.al]);
   const sd = s => `<span class="${s === 'long' ? 'pos' : 'neg'}">${s === 'long' ? '做多' : '做空'}</span>`;
   const P2 = x => isFinite(x) ? pct(x, 2) : '–';
   $('advTable').innerHTML = list.length ? `<tr><th>類型</th><th>大盤</th><th>筆數</th><th>勝率</th><th>平均賺</th><th>平均賠</th><th>獲利因子</th><th>期望值/筆</th><th>期望值(R)</th><th>最大連敗</th><th>最大回撤</th><th>平均最大順向</th><th>平均最大逆向</th></tr>` +
@@ -750,7 +758,7 @@ function renderAdv(){
       let st = 0, mx = 0, cum = 0, pk = 0, dd = 0;
       for (const x of v){ st = x <= 0 ? st + 1 : 0; mx = Math.max(mx, st); cum += x; pk = Math.max(pk, cum); dd = Math.min(dd, cum - pk); }
       const er = avg(G.r);
-      return `<tr><td>${esc(G.kind)} ${sd(G.side)}</td><td>${G.al === '逆大盤' ? '<span class="wrn">逆大盤</span>' : G.al}</td><td class="num">${v.length}</td>
+      return `<tr><td>${esc(G.kind)} ${sd(G.side)}</td><td>${G.al === '逆大盤' ? '<span class="wrn">逆大盤</span>' : G.al === '順大盤' ? G.al : `<span class="mute">${G.al}</span>`}</td><td class="num">${v.length}</td>
         <td class="num">${(w.length / v.length * 100).toFixed(0)}%</td><td class="num pos">${P2(avg(w))}</td><td class="num neg">${P2(avg(l))}</td>
         <td class="num">${isFinite(pf) ? pf.toFixed(2) : '∞'}</td><td class="num ${cls(avg(v))}">${P2(avg(v))}</td>
         <td class="num ${cls(er)}">${isFinite(er) ? (er >= 0 ? '+' : '') + er.toFixed(2) + 'R' : '–'}</td>
