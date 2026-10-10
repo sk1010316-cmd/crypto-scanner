@@ -83,6 +83,27 @@ main{max-width:1200px;margin:0 auto;padding:12px 16px 48px}
 .bar i{display:block;height:100%;border-radius:2px}
 .l2{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--mute)}
 .l2 b{font-weight:500}
+.row{cursor:pointer}
+.ptog{margin-left:auto;color:var(--accent)}
+.ptog i{font-style:normal;display:inline-block;transition:transform .15s}
+.row.open .ptog i{transform:rotate(180deg)}
+.pdet{grid-column:1/-1;display:none;margin-top:8px}
+.row.open .pdet{display:block}
+.plan{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:default}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px}
+@media(max-width:520px){.pgrid{grid-template-columns:repeat(2,1fr)}}
+.pgrid div{display:flex;flex-direction:column;min-width:0}
+.pgrid span{color:var(--dim);font-size:11px;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
+.pgrid b{font-size:14px;font-weight:600;white-space:nowrap}
+.pgrid b span{font-size:14px;font-family:inherit}
+.pgrid b span.neg{color:var(--short)}.pgrid b span.pos{color:var(--long)}
+.pgrid em{font-style:normal;color:var(--mute);font-size:11px}
+.pnote{font-size:12px;color:var(--mute);margin-top:8px}
+.pnote.warn{color:var(--warn)}
+.alist .a{cursor:pointer}
+.a .pdet{grid-column:1/-1;margin-top:6px}
+.a.open .pdet{display:block}
+.a.open .ptog i{transform:rotate(180deg)}
 
 .alist .a{padding:11px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center}
 .alist .a:last-child{border-bottom:none}
@@ -135,16 +156,16 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
 </nav>
 <main>
   <div class="banner err hidden" id="errBanner"></div>
-  <div class="banner warn" id="armBanner">點上方「🔔 啟用提醒」才會有聲音和桌面通知。iPhone 想在鎖屏收到提醒，請到「設定」填 Telegram。</div>
+  <div class="banner warn" id="armBanner">反轉排行：只有分數 ≥ 90 才推薦並提醒。回測顯示這類名單勝率比隨機高約 3–5 個百分點，但扣手續費後約打平，請看「回顧統計」的實際表現再決定要不要用。點上方「🔔 啟用提醒」才有聲音和通知。</div>
 
   <section class="view active" id="v-rank">
     <div class="grid2">
       <div class="panel">
-        <div class="ph"><h2 class="long">▲ 做多推薦</h2><small>✓ 價格、OI、CVD 同向</small></div>
+        <div class="ph"><h2 class="long">▲ 做多推薦（短線超跌）</h2><small>剛跌最多、賣壓最重 → 等反彈</small></div>
         <div id="longList"><div class="empty">掃描中…</div></div>
       </div>
       <div class="panel">
-        <div class="ph"><h2 class="short">▼ 做空推薦</h2><small>✓ 價格、OI、CVD 同向</small></div>
+        <div class="ph"><h2 class="short">▼ 做空推薦（短線超漲）</h2><small>剛漲最多、買盤最兇 → 等回落</small></div>
         <div id="shortList"><div class="empty">掃描中…</div></div>
       </div>
     </div>
@@ -165,6 +186,11 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
       <div class="twrap"><table id="statsTable"></table></div>
       <div class="note">以提醒當下價格為進場，計算 1 小時、4 小時後順著提醒方向的報酬，已扣除設定裡的來回成本。網頁開著時會自動補算，每次最多 15 筆。樣本少於 30 筆的結果參考價值很低。</div>
     </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="ph"><h2>照下單建議執行的結果</h2><small>止損 / 止盈 / 4h 時間停損</small></div>
+      <div class="twrap"><table id="planTable"></table></div>
+      <div class="note">R = 以止損距離為單位的損益（−1R 就是剛好打到止損）。平均 R 大於 0 才代表這套計畫長期有正期望值；帳戶影響 = 平均 R × 每筆風險 %。</div>
+    </div>
   </section>
 
   <section class="view" id="v-settings">
@@ -177,9 +203,14 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
         <h3>推薦提醒</h3>
         <label>分數門檻（0–100）<input type="number" data-k="alertScore" min="50" max="100"></label>
         <label>同幣種同方向冷卻（分鐘）<input type="number" data-k="cooldown" min="5" step="5"></label>
-        <h3>異常警報</h3>
-        <label>單根 5 分 K 漲跌幅（%）<input type="number" data-k="spikePct" min="0.5" step="0.5"></label>
-        <label>成交量倍數（× 中位數）<input type="number" data-k="spikeVol" min="1" step="0.5"></label>
+        <h3>下單建議（止損 / 止盈 / 倉位 / 槓桿）</h3>
+        <label>帳戶資金（USDT，0 = 不算倉位）<input type="number" data-k="equity" min="0" step="100"></label>
+        <label>每筆最多虧損（帳戶 %）<input type="number" data-k="riskPct" min="0.1" max="5" step="0.1"></label>
+        <label>止損距離（ATR 倍數）<input type="number" data-k="slAtr" min="0.5" step="0.5"></label>
+        <label>止盈（止損距離的 R 倍數）<input type="number" data-k="tpR" min="0.5" step="0.5"></label>
+        <label>槓桿上限（x）<input type="number" data-k="maxLev" min="1" max="50"></label>
+        <label>單筆保證金上限（帳戶 %）<input type="number" data-k="marginPct" min="5" max="100" step="5"></label>
+        <label>維持保證金率（%，估強平用）<input type="number" data-k="mmr" min="0" step="0.1"></label>
         <h3>回顧統計</h3>
         <label>來回成本（%，手續費＋滑價）<input type="number" data-k="cost" min="0" step="0.01"></label>
         <h3>提醒方式</h3>
@@ -204,16 +235,26 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
 
 <script>
 const API = 'https://fapi.binance.com';
-const DEF = {topN:80, minQVm:20, interval:5, alertScore:75, cooldown:60, spikePct:3, spikeVol:3,
-             cost:0.1, sound:true, notify:true, wake:false, tgToken:'', tgChat:''};
-const W = {ret:.25, oi:.25, cvd:.25, vol:.15, fund:.10};
-const STRUCT = {LU:'多頭增倉', SC:'空頭回補', SU:'空頭增倉', LC:'多頭平倉'};
+const DEF = {topN:80, minQVm:20, interval:5, alertScore:90, cooldown:120,
+             cost:0.1, sound:true, notify:true, wake:false, tgToken:'', tgChat:'',
+             equity:0, riskPct:1, slAtr:1.5, tpR:2, maxLev:10, marginPct:30, mmr:0.5};
+const HOLD_BARS = 48;   // 時間停損：4 小時（48 根 5 分 K），與回測一致
+// 反轉權重：依因子研究（534 檔、180 天）各指標預測力大小設定
+const W = {r1:.35, r5:.25, r4:.20, cvd:.15, r24:.05};
 const MAX_ALERTS = 1000;
 
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch{ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
 };
+// 第 2 版（反轉排行）：舊的門檻、提醒紀錄來自不同邏輯，升級時重設，舊紀錄另存
+if (LS.get('ver', 1) < 2){
+  const oc = LS.get('cfg', {});
+  delete oc.alertScore; delete oc.cooldown; delete oc.spikePct; delete oc.spikeVol;
+  LS.set('cfg', oc);
+  LS.set('alerts_v1', LS.get('alerts', [])); LS.set('alerts', []); LS.set('cool', {});
+  LS.set('ver', 2);
+}
 let cfg = {...DEF, ...LS.get('cfg', {})};
 let alerts = LS.get('alerts', []);   // 新的在前
 let cool = LS.get('cool', {});
@@ -265,19 +306,18 @@ async function universe(){
   return t.slice(0, cfg.topN).map(x => ({symbol:x.symbol, chg24:+x.priceChangePercent/100}));
 }
 async function fetchSym(u){
-  const [k0, oi] = await Promise.all([
-    j('/fapi/v1/klines', {symbol:u.symbol, interval:'5m', limit:49}),
-    j('/futures/data/openInterestHist', {symbol:u.symbol, period:'5m', limit:13})
-  ]);
+  const k0 = await j('/fapi/v1/klines', {symbol:u.symbol, interval:'5m', limit:49});
   const kl = k0.slice(0, -1);              // 去掉未收盤 K 棒
-  if (kl.length < 24 || oi.length < 2) return null;
-  const c = kl.map(k=>+k[4]), v = kl.map(k=>+k[5]), b = kl.map(k=>+k[9]), o = oi.map(x=>+x.sumOpenInterest);
+  if (kl.length < 48) return null;
+  const c = kl.map(k=>+k[4]), v = kl.map(k=>+k[5]), b = kl.map(k=>+k[9]);
+  const hi = kl.map(k=>+k[2]), lo = kl.map(k=>+k[3]);
   const n = kl.length, v12 = sum(v.slice(-12));
+  let tr = 0; for (let i = n-14; i < n; i++) tr += Math.max(hi[i]-lo[i], Math.abs(hi[i]-c[i-1]), Math.abs(lo[i]-c[i-1]));
+  const atr = tr / 14;                      // 5 分 K ATR(14)
   let d12 = 0; for (let i = n-12; i < n; i++) d12 += 2*b[i] - v[i];   // CVD 變化
   const baseVol = median(v.slice(0,-3)) || 1e-12, prevMed = median(v.slice(0,-1)) || 1e-12;
-  return {...u, price:c[n-1], ts:+kl[n-1][6] + 1,
-    r5:c[n-1]/c[n-2]-1, r1:c[n-1]/c[n-13]-1, r4:c[n-1]/c[0]-1,
-    oi1: o[0] ? o[o.length-1]/o[0]-1 : 0,
+  return {...u, price:c[n-1], ts:+kl[n-1][6] + 1, atr,
+    r5:c[n-1]/c[n-2]-1, r1:c[n-1]/c[n-13]-1, r4:c[n-1]/c[0]-1, r24:u.chg24,
     cvd: v12 ? d12/v12 : 0,
     vr: (sum(v.slice(-3))/3)/baseVol,
     lvm: v[n-1]/prevMed};
@@ -290,14 +330,16 @@ function pctRank(vals){
   return r;
 }
 function scoreAll(rs){
-  const ret = pctRank(rs.map(r=>r.r1)), oi = pctRank(rs.map(r=>r.oi1)), cvd = pctRank(rs.map(r=>r.cvd)),
-        vol = pctRank(rs.map(r=>r.vr)), fund = pctRank(rs.map(r=>r.fund));
+  // 每個指標在本輪所有幣中的百分位（0 = 最低、1 = 最高）
+  const R = {};
+  for (const k of Object.keys(W)) R[k] = pctRank(rs.map(r => r[k]));
   rs.forEach((r, i) => {
-    r.ls = 100*(W.ret*ret[i] + W.oi*oi[i] + W.cvd*cvd[i] + W.vol*vol[i] + W.fund*(1-fund[i]));
-    r.ss = 100*(W.ret*(1-ret[i]) + W.oi*oi[i] + W.cvd*(1-cvd[i]) + W.vol*vol[i] + W.fund*fund[i]);
-    r.st = r.r1 > 0 ? (r.oi1 > 0 ? 'LU' : 'SC') : (r.oi1 > 0 ? 'SU' : 'LC');
-    r.lok = r.r1 > 0 && r.oi1 > 0 && r.cvd > 0;
-    r.sok = r.r1 < 0 && r.oi1 > 0 && r.cvd < 0;
+    let up = 0;                                   // 「剛漲最多、買最兇」的程度
+    for (const k of Object.keys(W)) up += W[k] * R[k][i];
+    r.ss = 100 * up;                              // 超漲 → 做空分數
+    r.ls = 100 * (1 - up);                        // 超跌 → 做多分數
+    r.lok = r.ls >= cfg.alertScore;
+    r.sok = r.ss >= cfg.alertScore;
   });
   return rs;
 }
@@ -345,28 +387,96 @@ function setStatus(){
   $('statusText').textContent = parts.join(' · ') || '尚未掃描';
 }
 
+// ---------- 下單建議 ----------
+// 止損 = 進場 ∓ ATR × 倍數；止盈 = 止損距離 × R 倍數；4 小時沒碰到就時間出場。
+// 倉位由「每筆最多虧帳戶幾 %」反推；槓桿取「保證金不超過上限」所需的最低倍數，
+// 且必須讓強平價離進場至少是止損距離的 2 倍。
+function plan(price, atr, side){
+  if (!(atr > 0) || !(price > 0)) return null;
+  const sign = side === 'long' ? 1 : -1;
+  const slDist = cfg.slAtr * atr, slPct = slDist / price, mmr = cfg.mmr / 100;
+  if (slPct >= 0.3) return null;            // 資料異常保護
+  const P = {side, entry: price, sl: price - sign*slDist, tp: price + sign*slDist*cfg.tpR,
+             slPct, tpPct: slPct*cfg.tpR, rr: cfg.tpR,
+             safeMax: Math.max(1, Math.floor(1 / (2*slPct + mmr))), warn: ''};
+  if (slPct > 0.08) P.warn = '止損距離超過 8%，這檔波動過大，建議跳過';
+  if (!(cfg.equity > 0)) return P;
+  const cap = Math.max(1, Math.min(cfg.maxLev, P.safeMax));
+  let notional = (cfg.equity * cfg.riskPct / 100) / slPct;
+  const marginCap = cfg.equity * cfg.marginPct / 100;
+  let lev = Math.max(1, Math.ceil(notional / marginCap));
+  if (lev > cap){
+    lev = cap; notional = marginCap * cap;
+    P.warn ||= `受槓桿上限 ${cap}x 限制，倉位已縮小，實際風險低於設定`;
+  }
+  Object.assign(P, {lev, notional, qty: notional / price, margin: notional / lev,
+    loss: notional * slPct, gain: notional * P.tpPct,
+    liq: side === 'long' ? price*(1 - 1/lev + mmr) : price*(1 + 1/lev - mmr)});
+  return P;
+}
+const money = x => '$' + (x >= 100 ? x.toFixed(0) : x.toFixed(2));
+const fmtQty = q => q >= 100 ? q.toFixed(0) : q >= 1 ? q.toFixed(2) : q.toPrecision(3);
+function planHTML(P){
+  if (!P) return '<div class="plan"><span class="mute">ATR 資料不足，無法計算</span></div>';
+  const long = P.side === 'long';
+  let h = `<div class="plan">
+    <div class="pgrid num">
+      <div><span>進場（市價）</span><b>${fmtPx(P.entry)}</b></div>
+      <div><span>止損</span><b class="neg">${fmtPx(P.sl)}</b><em>${long ? '−' : '+'}${(P.slPct*100).toFixed(2)}%</em></div>
+      <div><span>止盈（${P.rr}R）</span><b class="pos">${fmtPx(P.tp)}</b><em>${long ? '+' : '−'}${(P.tpPct*100).toFixed(2)}%</em></div>
+      <div><span>時間停損</span><b>4 小時</b><em>都沒碰到就平倉</em></div>`;
+  if (P.lev){
+    h += `<div><span>建議槓桿（逐倉）</span><b>${P.lev}x</b><em>最高安全 ${P.safeMax}x</em></div>
+      <div><span>數量 / 名目</span><b>${fmtQty(P.qty)}</b><em>${money(P.notional)}</em></div>
+      <div><span>保證金</span><b>${money(P.margin)}</b><em>預估強平 ${fmtPx(P.liq)}</em></div>
+      <div><span>止損虧 / 止盈賺</span><b><span class="neg">−${money(P.loss)}</span> / <span class="pos">+${money(P.gain)}</span></b><em>未含手續費</em></div>`;
+  }
+  h += `</div>`;
+  if (!P.lev) h += `<div class="pnote">到「設定」填入帳戶資金，才會算數量、保證金和槓桿。</div>`;
+  if (P.warn) h += `<div class="pnote warn">⚠ ${esc(P.warn)}</div>`;
+  return h + `</div>`;
+}
+const planText = P => !P ? '' :
+  `\n進場 ${fmtPx(P.entry)}｜止損 ${fmtPx(P.sl)}（${(P.slPct*100).toFixed(2)}%）｜止盈 ${fmtPx(P.tp)}（${P.rr}R）｜4h 時間停損` +
+  (P.lev ? `\n逐倉 ${P.lev}x｜數量 ${fmtQty(P.qty)}｜保證金 ${money(P.margin)}｜止損虧 ${money(P.loss)}` : '') +
+  (P.warn ? `\n⚠ ${P.warn}` : '');
+
 // ---------- 排行 ----------
 function rowHTML(r, i, side){
   const sc = side === 'long' ? r.ls : r.ss, ok = side === 'long' ? r.lok : r.sok;
   const color = side === 'long' ? 'var(--long)' : 'var(--short)';
-  return `<div class="row${ok ? ' ok' : ''}">
+  const key = side + '|' + r.symbol;
+  return `<div class="row${ok ? ' ok' : ''}${openRows.has(key) ? ' open' : ''}" data-key="${esc(key)}">
     <div class="rk num">${i+1}</div>
     <div class="l1">
       <a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(r.symbol)}" target="_blank" rel="noopener">${esc(base(r.symbol))}<small>USDT</small></a>
       <span class="px num">${fmtPx(r.price)}</span>
-      <span class="tag ${r.st}">${STRUCT[r.st]}</span>
-      ${ok ? `<span class="chk ${side}">✓ 結構一致</span>` : ''}
+      ${ok ? `<span class="chk ${side}">★ ${cfg.alertScore} 分以上・推薦</span>` : ''}
     </div>
-    <div class="sc"><b class="num" style="color:${sc >= cfg.alertScore && ok ? color : 'var(--text)'}">${sc.toFixed(1)}</b>
+    <div class="sc"><b class="num" style="color:${ok ? color : 'var(--mute)'}">${sc.toFixed(1)}</b>
       <div class="bar"><i style="width:${sc.toFixed(1)}%;background:${color}"></i></div></div>
     <div class="l2 num">
+      <span>5m <b class="${cls(r.r5)}">${pct(r.r5)}</b></span>
       <span>1h <b class="${cls(r.r1)}">${pct(r.r1)}</b></span>
-      <span>OI <b class="${cls(r.oi1)}">${pct(r.oi1)}</b></span>
+      <span>4h <b class="${cls(r.r4)}">${pct(r.r4)}</b></span>
+      <span>24h <b class="${cls(r.r24)}">${pct(r.r24)}</b></span>
       <span>CVD <b class="${cls(r.cvd)}">${(r.cvd>=0?'+':'') + r.cvd.toFixed(2)}</b></span>
-      <span>量比 <b>${r.vr.toFixed(1)}</b></span>
       <span>費率 <b class="${cls(-r.fund)}">${pct(r.fund, 4)}</b></span>
+      <span class="ptog">下單建議 <i>▾</i></span>
     </div>
+    <div class="pdet">${planHTML(plan(r.price, r.atr, side))}</div>
   </div>`;
+}
+const openRows = new Set();
+function bindRowToggle(el){
+  el.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    if (e.target.closest('.plan')) return;
+    const row = e.target.closest('.row, .a');
+    if (!row) return;
+    const k = row.dataset.key;
+    row.classList.toggle('open') ? openRows.add(k) : openRows.delete(k);
+  });
 }
 function renderRank(){
   const top = (key) => [...rows].sort((a,b) => b[key]-a[key]).slice(0, 10);
@@ -382,13 +492,11 @@ function findAlerts(rs){
     if (now - (cool[key] || 0) < cd) return;
     cool[key] = now;
     out.push({id: now + '-' + key, t: r.ts, sym: r.symbol, kind, side, price: r.price, score: +score.toFixed(1),
-              reason, r1: r.r1, oi1: r.oi1, cvd: r.cvd, fund: r.fund});
+              reason, r1: r.r1, r4: r.r4, r24: r.r24, cvd: r.cvd, fund: r.fund, atr: r.atr, plan: plan(r.price, r.atr, side)});
   };
   for (const r of rs){
-    if (r.lok && r.ls >= cfg.alertScore) push('推薦', 'long', r, r.ls, STRUCT[r.st]);
-    if (r.sok && r.ss >= cfg.alertScore) push('推薦', 'short', r, r.ss, STRUCT[r.st]);
-    if (Math.abs(r.r5)*100 >= cfg.spikePct && r.lvm >= cfg.spikeVol)
-      push('異動', r.r5 > 0 ? 'long' : 'short', r, 0, `5m ${pct(r.r5)} 量 ×${r.lvm.toFixed(1)}`);
+    if (r.lok) push('推薦', 'long', r, r.ls, '短線超跌');
+    if (r.sok) push('推薦', 'short', r, r.ss, '短線超漲');
   }
   for (const k in cool) if (now - cool[k] > 24*3600e3) delete cool[k];
   LS.set('cool', cool);
@@ -400,13 +508,14 @@ function fire(a){
   LS.set('alerts', alerts);
   const sideTxt = a.side === 'long' ? '做多' : '做空';
   const title = `[${a.kind}] ${sideTxt} ${base(a.sym)}`;
-  const body = `${fmtPx(a.price)}｜${a.reason}｜1h ${pct(a.r1)} OI ${pct(a.oi1)}` + (a.kind === '推薦' ? `｜分數 ${a.score}` : '');
+  const body = `${fmtPx(a.price)}｜${a.reason}` + (a.kind === '推薦' ? `｜分數 ${a.score}` : '') +
+    (a.plan ? `｜止損 ${fmtPx(a.plan.sl)} 止盈 ${fmtPx(a.plan.tp)}` + (a.plan.lev ? ` ${a.plan.lev}x` : '') : '');
   toast(title, body, a.side);
   beep(a.side);
   if (armed && cfg.notify && 'Notification' in window && Notification.permission === 'granted'){
     try{ new Notification(title, {body, tag: a.id}); }catch{}
   }
-  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  OI ${pct(a.oi1)}  CVD ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : ''));
+  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
   if (!$('v-alerts').classList.contains('active')){ unseen++; renderBadge(); }
   renderAlerts();
 }
@@ -440,17 +549,32 @@ function renderAlerts(){
   if (!alerts.length){ $('alertList').innerHTML = '<div class="empty">還沒有提醒。符合條件的標的出現時會記錄在這裡。</div>'; return; }
   $('alertList').innerHTML = alerts.slice(0, 200).map(a => {
     const ev = (x, h) => x == null ? `<span class="mute">${h} 待算</span>` : `<span class="${cls(x)}">${h} ${pct(x)}</span>`;
-    return `<div class="a">
+    return `<div class="a${openRows.has('a|' + a.id) ? ' open' : ''}" data-key="${esc('a|' + a.id)}">
       <span class="side ${a.side}">${a.side === 'long' ? '做多' : '做空'}</span>
       <div><span class="kind">${esc(a.kind)}</span><a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(a.sym)}" target="_blank" rel="noopener">${esc(base(a.sym))}</a>
         <span class="px num"> ${fmtPx(a.price)}</span></div>
       <div class="ev num">${ev(a.e1, '1h')}${ev(a.e4, '4h')}</div>
-      <div class="l2 num"><span>${mdhm(a.t)}</span><span>${esc(a.reason)}</span>${a.kind === '推薦' ? `<span>分數 ${a.score}</span>` : ''}</div>
+      <div class="l2 num"><span>${mdhm(a.t)}</span><span>${esc(a.reason)}</span>${a.kind === '推薦' ? `<span>分數 ${a.score}</span>` : ''}${
+        a.po ? `<span>計畫結果 <b class="${cls(a.po.pct)}">${{TP:'止盈', SL:'止損', TIME:'時間出場'}[a.po.out]} ${pct(a.po.pct)}（${a.po.r >= 0 ? '+' : ''}${a.po.r.toFixed(2)}R）</b></span>` : ''}${
+        a.plan ? `<span class="ptog">下單建議 <i>▾</i></span>` : ''}</div>
+      ${a.plan ? `<div class="pdet">${planHTML(a.plan)}</div>` : ''}
     </div>`;
   }).join('');
 }
 
 // ---------- 回顧統計 ----------
+// 逐根檢查 5 分 K 的最高 / 最低價；同一根同時碰到止損和止盈，保守算止損
+function gradePlan(P, kl, costF){
+  const long = P.side === 'long';
+  let exit = +kl[HOLD_BARS-1][4], out = 'TIME';
+  for (let i = 0; i < HOLD_BARS; i++){
+    const hi = +kl[i][2], lo = +kl[i][3];
+    if (long ? lo <= P.sl : hi >= P.sl){ exit = P.sl; out = 'SL'; break; }
+    if (long ? hi >= P.tp : lo <= P.tp){ exit = P.tp; out = 'TP'; break; }
+  }
+  const p = (long ? 1 : -1) * (exit / P.entry - 1) - costF;
+  return {out, pct: p, r: p / P.slPct};
+}
 async function evalPending(){
   const now = Date.now(), costF = cfg.cost / 100;
   let n = 0, changed = false;
@@ -463,7 +587,10 @@ async function evalPending(){
     try{
       const kl = await j('/fapi/v1/klines', {symbol: a.sym, interval: '5m', startTime: a.t, limit: need4 ? 48 : 12});
       if (kl.length >= 12 && a.e1 == null){ a.e1 = sign*(+kl[11][4]/a.price - 1) - costF; changed = true; }
-      if (need4 && kl.length >= 48){ a.e4 = sign*(+kl[47][4]/a.price - 1) - costF; changed = true; }
+      if (need4 && kl.length >= 48){
+        a.e4 = sign*(+kl[47][4]/a.price - 1) - costF; changed = true;
+        if (a.plan && a.po == null) a.po = gradePlan(a.plan, kl, costF);
+      }
     }catch{}
   }
   if (changed){ LS.set('alerts', alerts); renderAlerts(); renderStats(); }
@@ -485,6 +612,23 @@ function renderStats(){
     ? `<tr><th>類型</th><th>總筆數</th><th>1h 筆數</th><th>1h 勝率</th><th>1h 平均</th><th>4h 筆數</th><th>4h 勝率</th><th>4h 平均</th></tr>` +
       list.map(g => `<tr><td>${esc(g.kind)} <span class="${g.side === 'long' ? 'pos' : 'neg'}">${g.side === 'long' ? '做多' : '做空'}</span></td><td class="num">${g.n}</td>${cell(g.e1)}${cell(g.e4)}</tr>`).join('')
     : '<tr><td class="mute" style="text-align:center;padding:24px">還沒有資料</td></tr>';
+
+  const pg = {};
+  for (const a of alerts){
+    if (!a.po) continue;
+    (pg[a.kind + '|' + a.side] ||= {kind: a.kind, side: a.side, v: []}).v.push(a.po);
+  }
+  const pl = Object.values(pg).sort((a,b) => (a.kind+a.side).localeCompare(b.kind+b.side));
+  const rate = (v, o) => (v.filter(x => x.out === o).length / v.length * 100).toFixed(0) + '%';
+  $('planTable').innerHTML = pl.length
+    ? `<tr><th>類型</th><th>筆數</th><th>止盈</th><th>止損</th><th>時間出場</th><th>平均淨報酬</th><th>平均 R</th><th>帳戶影響/筆</th></tr>` +
+      pl.map(g => { const r = sum(g.v.map(x => x.r)) / g.v.length;
+        return `<tr><td>${esc(g.kind)} <span class="${g.side === 'long' ? 'pos' : 'neg'}">${g.side === 'long' ? '做多' : '做空'}</span></td>
+        <td class="num">${g.v.length}</td><td class="num">${rate(g.v,'TP')}</td><td class="num">${rate(g.v,'SL')}</td><td class="num">${rate(g.v,'TIME')}</td>
+        <td class="num ${cls(sum(g.v.map(x=>x.pct)))}">${pct(sum(g.v.map(x => x.pct)) / g.v.length, 3)}</td>
+        <td class="num ${cls(r)}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</td>
+        <td class="num ${cls(r)}">${pct(r * cfg.riskPct / 100, 2)}</td></tr>`; }).join('')
+    : '<tr><td class="mute" style="text-align:center;padding:24px">提醒滿 4 小時後才會有結果</td></tr>';
 }
 
 // ---------- 設定 ----------
@@ -552,9 +696,11 @@ $('clearBtn').onclick = () => {
   alerts = []; LS.set('alerts', alerts); renderAlerts(); renderStats();
 };
 $('csvBtn').onclick = () => {
-  const head = ['時間','幣種','類型','方向','價格','分數','原因','1h漲跌','OI變化','CVD','費率','1h後報酬','4h後報酬'];
+  const head = ['時間','幣種','類型','方向','價格','分數','原因','1h漲跌','4h漲跌','CVD','費率','1h後報酬','4h後報酬',
+                '止損','止盈','建議槓桿','計畫結果','計畫報酬','計畫R'];
   const lines = alerts.map(a => [new Date(a.t).toISOString(), a.sym, a.kind, a.side, a.price, a.score, a.reason,
-    a.r1, a.oi1, a.cvd, a.fund, a.e1 ?? '', a.e4 ?? ''].map(x => `"${String(x).replace(/"/g,'""')}"`).join(','));
+    a.r1, a.r4 ?? '', a.cvd, a.fund, a.e1 ?? '', a.e4 ?? '', a.plan?.sl ?? '', a.plan?.tp ?? '', a.plan?.lev ?? '',
+    a.po?.out ?? '', a.po?.pct ?? '', a.po?.r ?? ''].map(x => `"${String(x).replace(/"/g,'""')}"`).join(','));
   const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], {type: 'text/csv'});
   const url = URL.createObjectURL(blob), el = document.createElement('a');
   el.href = url; el.download = 'alerts_' + new Date().toISOString().slice(0,10) + '.csv'; el.click();
@@ -567,6 +713,7 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(setStatus, 1000);
 
+['longList', 'shortList', 'alertList'].forEach(id => bindRowToggle($(id)));
 fillForm(); renderAlerts(); renderStats(); scan();
 </script>
 </body>
