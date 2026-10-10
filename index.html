@@ -136,6 +136,9 @@ tr:last-child td{border-bottom:none}
 .toast b{display:block;margin-bottom:2px}
 @keyframes in{from{transform:translateY(10px);opacity:0}}
 footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-size:11px}
+.regime{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px;line-height:1.7}
+.regime .up{color:var(--long)}.regime .down{color:var(--short)}.regime .range{color:var(--warn)}
+.wrn{font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;color:var(--warn);background:var(--warn-bg);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -159,6 +162,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
   <div class="banner warn" id="armBanner">反轉排行：只有分數 ≥ 90 才推薦並提醒。回測顯示這類名單勝率比隨機高約 3–5 個百分點，但扣手續費後約打平，請看「回顧統計」的實際表現再決定要不要用。點上方「🔔 啟用提醒」才有聲音和通知。</div>
 
   <section class="view active" id="v-rank">
+    <div class="regime" id="regime">讀取 BTC 大盤狀態…</div>
     <div class="grid2">
       <div class="panel">
         <div class="ph"><h2 class="long">▲ 做多推薦（短線超跌）</h2><small>剛跌最多、賣壓最重 → 等反彈</small></div>
@@ -184,12 +188,21 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
     <div class="panel">
       <div class="ph"><h2>提醒後表現</h2><small id="statsMeta"></small></div>
       <div class="twrap"><table id="statsTable"></table></div>
-      <div class="note">以提醒當下價格為進場，計算 1 小時、4 小時後順著提醒方向的報酬，已扣除設定裡的來回成本。網頁開著時會自動補算，每次最多 15 筆。樣本少於 30 筆的結果參考價值很低。</div>
+      <div class="note">以提醒後下一根 5 分 K 開盤價為進場，計算 1 小時、4 小時後順著提醒方向的報酬，已扣除設定裡的來回成本（含滑價）。網頁開著時會自動補算，每次最多 15 筆。樣本少於 30 筆的結果參考價值很低。</div>
     </div>
     <div class="panel" style="margin-top:14px">
       <div class="ph"><h2>照下單建議執行的結果</h2><small>止損 / 止盈 / 4h 時間停損</small></div>
       <div class="twrap"><table id="planTable"></table></div>
-      <div class="note">R = 以止損距離為單位的損益（−1R 就是剛好打到止損）。平均 R 大於 0 才代表這套計畫長期有正期望值；帳戶影響 = 平均 R × 每筆風險 %。</div>
+      <div class="note">R = 以止損距離為單位的損益（−1R 就是剛好打到止損）。止損止盈依「模擬進場價」重新計算。平均 R 大於 0 才代表這套計畫長期有正期望值；帳戶影響 = 平均 R × 每筆風險 %。</div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="ph"><h2>進階統計（4 小時結果，依順／逆大盤分開）</h2><small>判斷大盤濾網有沒有用</small></div>
+      <div class="twrap"><table id="advTable"></table></div>
+      <div class="note">獲利因子 = 總獲利 ÷ 總虧損（&gt;1 才賺）。最大回撤 = 依時間順序把每筆報酬加總後，從高點到低點的最大跌幅。最大順向／逆向（MFE／MAE）= 持有 4 小時內曾經最多賺／最多虧多少：順向常常很大但最後沒賺到 → 出場太晚；逆向常常很大 → 進場太早或止損太近。「順大盤」明顯比「逆大盤」好，大盤濾網才值得真的擋掉訊號。</div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="ph"><h2>時段分析</h2><small>4 小時平均淨報酬</small></div>
+      <div class="twrap"><table id="hourTable"></table></div>
     </div>
   </section>
 
@@ -217,6 +230,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
         <label class="cb"><input type="checkbox" data-k="sound">提醒音效</label>
         <label class="cb"><input type="checkbox" data-k="notify">桌面通知</label>
         <label class="cb"><input type="checkbox" data-k="wake">保持螢幕常亮（手機開著網頁時）</label>
+        <label class="cb"><input type="checkbox" data-k="tgAligned">Telegram 只推播「沒有和 BTC 大盤相反」的訊號（網頁上照樣顯示與記錄）</label>
         <h3>Telegram 推播（iPhone 鎖屏提醒用）</h3>
         <label>Bot Token<input type="password" data-k="tgToken" autocomplete="off" placeholder="123456:ABC..."></label>
         <label>Chat ID<input type="text" data-k="tgChat" autocomplete="off" placeholder="123456789"></label>
@@ -236,7 +250,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
 <script>
 const API = 'https://fapi.binance.com';
 const DEF = {topN:80, minQVm:20, interval:5, alertScore:90, cooldown:120,
-             cost:0.15, sound:true, notify:true, wake:false, tgToken:'', tgChat:'',
+             cost:0.15, sound:true, notify:true, wake:false, tgToken:'', tgChat:'', tgAligned:true,
              equity:0, riskPct:1, slAtr:1.5, tpR:2, maxLev:10, marginPct:30, mmr:0.5};
 const HOLD_BARS = 48;   // 時間停損：4 小時（48 根 5 分 K），與回測一致
 // 反轉權重：依因子研究（534 檔、180 天）各指標預測力大小設定
@@ -359,6 +373,8 @@ async function scan(){
     const got = (await pool(uni, 8, fetchSym)).filter(Boolean);
     if (got.length < 5) throw new Error('取得的幣種資料太少（' + got.length + ' 檔）');
     got.forEach(r => r.fund = fr[r.symbol] ?? 0);
+    try{ regime = await btcRegime(); }catch{ regime = null; }
+    renderRegime();
     rows = scoreAll(got);
     lastScan = Date.now(); lastErr = '';
     $('errBanner').classList.add('hidden');
@@ -456,6 +472,7 @@ function rowHTML(r, i, side){
     <div class="l1">
       <a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(r.symbol)}" target="_blank" rel="noopener">${esc(base(r.symbol))}<small>USDT</small></a>
       <span class="px num">${fmtPx(r.price)}</span>
+      ${ok && warnFor(side) ? `<span class="wrn">${warnFor(side)}</span>` : ''}
       ${ok ? `<span class="chk ${side}">★ ${cfg.alertScore} 分以上・推薦</span>` : ''}
     </div>
     <div class="sc"><b class="num" style="color:${ok ? color : 'var(--mute)'}">${sc.toFixed(1)}</b>
@@ -497,7 +514,7 @@ function findAlerts(rs){
     if (now - (cool[key] || 0) < cd) return;
     cool[key] = now;
     out.push({id: now + '-' + key, t: r.ts, sym: r.symbol, kind, side, price: r.price, score: +score.toFixed(1),
-              reason, r1: r.r1, r4: r.r4, r24: r.r24, cvd: r.cvd, fund: r.fund, atr: r.atr, plan: plan(r.price, r.atr, side)});
+              reason, r1: r.r1, r4: r.r4, r24: r.r24, cvd: r.cvd, fund: r.fund, atr: r.atr, plan: plan(r.price, r.atr, side), reg: regTag(), warn: warnFor(side)});
   };
   for (const r of rs){
     if (r.lok) push('推薦', 'long', r, r.ls, '短線超跌');
@@ -515,12 +532,12 @@ function fire(a){
   const title = `[${a.kind}] ${sideTxt} ${base(a.sym)}`;
   const body = `${fmtPx(a.price)}｜${a.reason}` + (a.kind === '推薦' ? `｜分數 ${a.score}` : '') +
     (a.plan ? `｜止損 ${fmtPx(a.plan.sl)} 止盈 ${fmtPx(a.plan.tp)}` + (a.plan.lev ? ` ${a.plan.lev}x` : '') : '');
-  toast(title, body, a.side);
+  toast(title, (a.warn ? a.warn + '｜' : '') + body, a.side);
   beep(a.side);
   if (armed && cfg.notify && 'Notification' in window && Notification.permission === 'granted'){
     try{ new Notification(title, {body, tag: a.id}); }catch{}
   }
-  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD估 ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
+  if (!(cfg.tgAligned && a.warn)) sendTG((a.warn ? a.warn + '\n' : '') + `${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD估 ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
   if (!$('v-alerts').classList.contains('active')){ unseen++; renderBadge(); }
   renderAlerts();
 }
@@ -568,9 +585,9 @@ function renderAlerts(){
     return `<div class="a${openRows.has('a|' + a.id) ? ' open' : ''}" data-key="${esc('a|' + a.id)}">
       <span class="side ${a.side}">${a.side === 'long' ? '做多' : '做空'}</span>
       <div><span class="kind">${esc(a.kind)}</span><a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(a.sym)}" target="_blank" rel="noopener">${esc(base(a.sym))}</a>
-        <span class="px num"> ${fmtPx(a.price)}</span></div>
+        <span class="px num"> ${fmtPx(a.price)}</span>${a.warn ? ` <span class="wrn">${esc(a.warn)}</span>` : ''}</div>
       <div class="ev num">${ev(a.e1, '1h')}${ev(a.e4, '4h')}</div>
-      <div class="l2 num"><span>${mdhm(a.t)}</span><span>${esc(a.reason)}</span>${a.kind === '推薦' ? `<span>分數 ${a.score}</span>` : ''}${
+      <div class="l2 num"><span>${mdhm(a.t)}</span>${a.ent ? `<span>模擬進場 ${fmtPx(a.ent)}</span>` : ''}${a.mfe != null ? `<span>4h 內最大順向 <b class="pos">${pct(a.mfe)}</b>／最大逆向 <b class="neg">${pct(a.mae)}</b></span>` : ''}<span>${esc(a.reason)}</span>${a.kind === '推薦' ? `<span>分數 ${a.score}</span>` : ''}${
         a.po ? `<span>計畫結果 <b class="${cls(a.po.pct)}">${{TP:'止盈', SL:'止損', TIME:'時間出場'}[a.po.out]} ${pct(a.po.pct)}（${a.po.r >= 0 ? '+' : ''}${a.po.r.toFixed(2)}R）</b></span>` : ''}${
         a.plan ? `<span class="ptog">下單建議 <i>▾</i></span>` : ''}</div>
       ${a.plan ? `<div class="pdet">${planHTML(a.plan)}</div>` : ''}
@@ -608,7 +625,14 @@ async function evalPending(){
       if (kl.length >= 12 && a.e1 == null){ a.e1 = sign*(+kl[11][4]/ent - 1) - costF; changed = true; }
       if (need4 && kl.length >= 48){
         a.e4 = sign*(+kl[47][4]/ent - 1) - costF; changed = true;
-        if (a.plan && a.po == null) a.po = gradePlan({...a.plan, entry: ent}, kl, costF);
+        // 4 小時內最大順向 / 逆向波動（MFE / MAE）
+        let hi = -Infinity, lo = Infinity;
+        for (let i = 0; i < 48; i++){ hi = Math.max(hi, +kl[i][2]); lo = Math.min(lo, +kl[i][3]); }
+        a.mfe = sign > 0 ? hi/ent - 1 : 1 - lo/ent;
+        a.mae = sign > 0 ? lo/ent - 1 : 1 - hi/ent;
+        // 止損止盈依模擬進場價重算（距離 % 不變），R 值才正確
+        if (a.plan && a.po == null) a.po = gradePlan({...a.plan, entry: ent,
+          sl: ent * (1 - sign * a.plan.slPct), tp: ent * (1 + sign * a.plan.tpPct)}, kl, costF);
       }
     }catch{}
   }
@@ -648,8 +672,97 @@ function renderStats(){
         <td class="num ${cls(r)}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</td>
         <td class="num ${cls(r)}">${pct(r * cfg.riskPct / 100, 2)}</td></tr>`; }).join('')
     : '<tr><td class="mute" style="text-align:center;padding:24px">提醒滿 4 小時後才會有結果</td></tr>';
+  renderAdv();
 }
 
+// ---------- BTC 大盤狀態（1 小時 K）----------
+let regime = null;
+function ema(a, n){ const k = 2/(n+1), o = [a[0]]; for (let i = 1; i < a.length; i++) o.push(a[i]*k + o[i-1]*(1-k)); return o; }
+async function btcRegime(){
+  const k = (await j('/fapi/v1/klines', {symbol: 'BTCUSDT', interval: '1h', limit: 250})).slice(0, -1);
+  const c = k.map(x => +x[4]), h = k.map(x => +x[2]), l = k.map(x => +x[3]), n = c.length, N = 14;
+  const e20 = ema(c, 20), e50 = ema(c, 50), tr = [], pdm = [], ndm = [];
+  for (let i = 1; i < n; i++){
+    tr.push(Math.max(h[i]-l[i], Math.abs(h[i]-c[i-1]), Math.abs(l[i]-c[i-1])));
+    const up = h[i]-h[i-1], dn = l[i-1]-l[i];
+    pdm.push(up > dn && up > 0 ? up : 0); ndm.push(dn > up && dn > 0 ? dn : 0);
+  }
+  const wil = a => { const o = []; let s = 0; for (let i = 0; i < N; i++) s += a[i]; o[N-1] = s;
+                     for (let i = N; i < a.length; i++){ s = s - s/N + a[i]; o[i] = s; } return o; };
+  const st = wil(tr), sp = wil(pdm), sn = wil(ndm), dx = [];
+  for (let i = N-1; i < tr.length; i++){ const p = sp[i]/st[i], q = sn[i]/st[i]; dx.push(p+q ? 100*Math.abs(p-q)/(p+q) : 0); }
+  let adx = 0; for (let i = 0; i < N; i++) adx += dx[i] / N;
+  for (let i = N; i < dx.length; i++) adx = (adx*(N-1) + dx[i]) / N;
+  const atrs = []; for (let i = N; i <= tr.length; i++){ let s = 0; for (let j2 = i-N; j2 < i; j2++) s += tr[j2]; atrs.push(s/N); }
+  const atrNow = atrs[atrs.length-1], atrBase = median(atrs.slice(-169, -1));      // 最近 7 天的中位數
+  const L = n-1, rising = e20[L] > e20[L-3] && e50[L] > e50[L-3], falling = e20[L] < e20[L-3] && e50[L] < e50[L-3];
+  let trend = 'range';
+  if (adx >= 20 && e20[L] > e50[L] && rising) trend = 'up';
+  else if (adx >= 20 && e20[L] < e50[L] && falling) trend = 'down';
+  return {trend, adx, atrRatio: atrNow/atrBase, hv: atrNow > 2*atrBase, e20: e20[L], e50: e50[L], price: c[L]};
+}
+const regTag = () => regime ? regime.trend + (regime.hv ? '+hv' : '') : null;
+function warnFor(side){
+  const R = regime; if (!R) return '';
+  if (PAGE === 'rev'){
+    if (R.hv) return '⚠ BTC 波動劇烈，逆勢訊號不建議';
+    if (side === 'short' && R.trend === 'up') return '⚠ 與 BTC 多頭相反';
+    if (side === 'long' && R.trend === 'down') return '⚠ 與 BTC 空頭相反';
+  } else {
+    if (side === 'long' && R.trend === 'down') return '⚠ 與 BTC 空頭相反';
+    if (side === 'short' && R.trend === 'up') return '⚠ 與 BTC 多頭相反';
+    if (R.trend === 'range') return '⚠ BTC 盤整，追價風險高';
+  }
+  return '';
+}
+function renderRegime(){
+  const el = $('regime'); if (!el) return;
+  if (!regime){ el.innerHTML = '<span class="mute">BTC 大盤狀態讀取失敗，訊號暫不標示順逆</span>'; return; }
+  const R = regime, T = {up: '多頭趨勢 ↑', down: '空頭趨勢 ↓', range: '盤整震盪 ↔'};
+  const hint = PAGE === 'rev'
+    ? (R.hv ? '波動劇烈：所有反轉訊號都標 ⚠' : R.trend === 'up' ? '做空推薦與大盤相反，會標 ⚠' : R.trend === 'down' ? '做多推薦與大盤相反，會標 ⚠' : '盤整：反轉策略較適合的環境')
+    : (R.trend === 'up' ? '做空訊號與大盤相反，會標 ⚠' : R.trend === 'down' ? '做多訊號與大盤相反，會標 ⚠' : '盤整：追價風險高，所有訊號標 ⚠');
+  el.innerHTML = `<b>BTC 大盤（1 小時 K）：<span class="${R.trend}">${T[R.trend]}</span></b>${R.hv ? ' <span class="wrn">⚠ 波動劇烈</span>' : ''}
+    <span class="mute num">｜EMA20 ${fmtPx(R.e20)} / EMA50 ${fmtPx(R.e50)}｜ADX ${R.adx.toFixed(0)}｜波動 ${R.atrRatio.toFixed(1)}× 平常</span>
+    <br>${hint}。⚠ 只是標示，不會擋掉訊號；回顧統計會把順／逆大盤分開，用實際結果判斷濾網有沒有用。`;
+}
+
+// ---------- 進階統計（4 小時結果） ----------
+function renderAdv(){
+  const g = {}, hb = {};
+  for (const a of [...alerts].reverse()){                 // 依時間先後
+    if (a.e4 == null) continue;
+    const al = a.reg == null ? '未標記' : (a.warn ? '逆大盤' : '順大盤');
+    const k = `${a.kind}|${a.side}|${al}`;
+    const G = (g[k] ||= {kind: a.kind, side: a.side, al, v: [], mfe: [], mae: [], r: []});
+    G.v.push(a.e4); if (a.mfe != null){ G.mfe.push(a.mfe); G.mae.push(a.mae); } if (a.po) G.r.push(a.po.r);
+    const hr = new Date(a.t).getHours(), b = Math.floor(hr / 6), hk = b + '|' + a.side;
+    (hb[hk] ||= []).push(a.e4);
+  }
+  const avg = v => v.length ? sum(v) / v.length : NaN;
+  const list = Object.values(g).sort((a, b) => (a.kind + a.side + a.al).localeCompare(b.kind + b.side + b.al));
+  const sd = s => `<span class="${s === 'long' ? 'pos' : 'neg'}">${s === 'long' ? '做多' : '做空'}</span>`;
+  const P2 = x => isFinite(x) ? pct(x, 2) : '–';
+  $('advTable').innerHTML = list.length ? `<tr><th>類型</th><th>大盤</th><th>筆數</th><th>勝率</th><th>平均賺</th><th>平均賠</th><th>獲利因子</th><th>期望值/筆</th><th>期望值(R)</th><th>最大連敗</th><th>最大回撤</th><th>平均最大順向</th><th>平均最大逆向</th></tr>` +
+    list.map(G => {
+      const v = G.v, w = v.filter(x => x > 0), l = v.filter(x => x <= 0);
+      const pf = l.length ? sum(w) / Math.abs(sum(l)) : Infinity;
+      let st = 0, mx = 0, cum = 0, pk = 0, dd = 0;
+      for (const x of v){ st = x <= 0 ? st + 1 : 0; mx = Math.max(mx, st); cum += x; pk = Math.max(pk, cum); dd = Math.min(dd, cum - pk); }
+      const er = avg(G.r);
+      return `<tr><td>${esc(G.kind)} ${sd(G.side)}</td><td>${G.al === '逆大盤' ? '<span class="wrn">逆大盤</span>' : G.al}</td><td class="num">${v.length}</td>
+        <td class="num">${(w.length / v.length * 100).toFixed(0)}%</td><td class="num pos">${P2(avg(w))}</td><td class="num neg">${P2(avg(l))}</td>
+        <td class="num">${isFinite(pf) ? pf.toFixed(2) : '∞'}</td><td class="num ${cls(avg(v))}">${P2(avg(v))}</td>
+        <td class="num ${cls(er)}">${isFinite(er) ? (er >= 0 ? '+' : '') + er.toFixed(2) + 'R' : '–'}</td>
+        <td class="num">${mx}</td><td class="num neg">${P2(dd)}</td><td class="num pos">${P2(avg(G.mfe))}</td><td class="num neg">${P2(avg(G.mae))}</td></tr>`;
+    }).join('') : '<tr><td class="mute" style="text-align:center;padding:24px">提醒滿 4 小時後才會有結果</td></tr>';
+  const names = ['00–06', '06–12', '12–18', '18–24'];
+  $('hourTable').innerHTML = `<tr><th>台北時段</th><th>做多筆數</th><th>做多平均</th><th>做空筆數</th><th>做空平均</th></tr>` +
+    names.map((nm, b) => { const L = hb[b + '|long'] || [], S = hb[b + '|short'] || [];
+      return `<tr><td>${nm}</td><td class="num">${L.length}</td><td class="num ${cls(avg(L))}">${P2(avg(L))}</td><td class="num">${S.length}</td><td class="num ${cls(avg(S))}">${P2(avg(S))}</td></tr>`; }).join('');
+}
+
+const PAGE = 'rev';
 // ---------- 設定 ----------
 function fillForm(){
   document.querySelectorAll('#form [data-k]').forEach(el => {
