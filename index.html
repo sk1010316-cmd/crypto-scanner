@@ -212,7 +212,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
         <label>單筆保證金上限（帳戶 %）<input type="number" data-k="marginPct" min="5" max="100" step="5"></label>
         <label>維持保證金率（%，估強平用）<input type="number" data-k="mmr" min="0" step="0.1"></label>
         <h3>回顧統計</h3>
-        <label>來回成本（%，手續費＋滑價）<input type="number" data-k="cost" min="0" step="0.01"></label>
+        <label>來回成本（%，手續費＋滑價，建議 0.15）<input type="number" data-k="cost" min="0" step="0.01"></label>
         <h3>提醒方式</h3>
         <label class="cb"><input type="checkbox" data-k="sound">提醒音效</label>
         <label class="cb"><input type="checkbox" data-k="notify">桌面通知</label>
@@ -236,7 +236,7 @@ footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-
 <script>
 const API = 'https://fapi.binance.com';
 const DEF = {topN:80, minQVm:20, interval:5, alertScore:90, cooldown:120,
-             cost:0.1, sound:true, notify:true, wake:false, tgToken:'', tgChat:'',
+             cost:0.15, sound:true, notify:true, wake:false, tgToken:'', tgChat:'',
              equity:0, riskPct:1, slAtr:1.5, tpR:2, maxLev:10, marginPct:30, mmr:0.5};
 const HOLD_BARS = 48;   // 時間停損：4 小時（48 根 5 分 K），與回測一致
 // 反轉權重：依因子研究（534 檔、180 天）各指標預測力大小設定
@@ -250,7 +250,7 @@ const LS = {
 // 第 2 版（反轉排行）：舊的門檻、提醒紀錄來自不同邏輯，升級時重設，舊紀錄另存
 if (LS.get('ver', 1) < 2){
   const oc = LS.get('cfg', {});
-  delete oc.alertScore; delete oc.cooldown; delete oc.spikePct; delete oc.spikeVol;
+  delete oc.alertScore; delete oc.cooldown; delete oc.cost; delete oc.spikePct; delete oc.spikeVol;
   LS.set('cfg', oc);
   LS.set('alerts_v1', LS.get('alerts', [])); LS.set('alerts', []); LS.set('cool', {});
   LS.set('ver', 2);
@@ -324,9 +324,14 @@ async function fetchSym(u){
 }
 
 // ---------- 評分 ----------
-function pctRank(vals){
+function pctRank(vals){                      // 同值取平均名次，避免條件相同卻分數不同
   const n = vals.length, order = [...vals.keys()].sort((a,b) => vals[a]-vals[b]), r = new Array(n).fill(.5);
-  order.forEach((i, k) => r[i] = n > 1 ? k/(n-1) : .5);
+  if (n < 2) return r;
+  for (let s = 0; s < n; ){
+    let e = s; while (e + 1 < n && vals[order[e + 1]] === vals[order[s]]) e++;
+    for (let k = s; k <= e; k++) r[order[k]] = ((s + e) / 2) / (n - 1);
+    s = e + 1;
+  }
   return r;
 }
 function scoreAll(rs){
@@ -426,9 +431,9 @@ function planHTML(P){
       <div><span>止盈（${P.rr}R）</span><b class="pos">${fmtPx(P.tp)}</b><em>${long ? '+' : '−'}${(P.tpPct*100).toFixed(2)}%</em></div>
       <div><span>時間停損</span><b>4 小時</b><em>都沒碰到就平倉</em></div>`;
   if (P.lev){
-    h += `<div><span>建議槓桿（逐倉）</span><b>${P.lev}x</b><em>最高安全 ${P.safeMax}x</em></div>
+    h += `<div><span>建議槓桿（逐倉）</span><b>${P.lev}x</b><em>安全上限粗估 ${P.safeMax}x</em></div>
       <div><span>數量 / 名目</span><b>${fmtQty(P.qty)}</b><em>${money(P.notional)}</em></div>
-      <div><span>保證金</span><b>${money(P.margin)}</b><em>預估強平 ${fmtPx(P.liq)}</em></div>
+      <div><span>保證金</span><b>${money(P.margin)}</b><em>強平粗估 ${fmtPx(P.liq)}（以交易所為準）</em></div>
       <div><span>止損虧 / 止盈賺</span><b><span class="neg">−${money(P.loss)}</span> / <span class="pos">+${money(P.gain)}</span></b><em>未含手續費</em></div>`;
   }
   h += `</div>`;
@@ -460,7 +465,7 @@ function rowHTML(r, i, side){
       <span>1h <b class="${cls(r.r1)}">${pct(r.r1)}</b></span>
       <span>4h <b class="${cls(r.r4)}">${pct(r.r4)}</b></span>
       <span>24h <b class="${cls(r.r24)}">${pct(r.r24)}</b></span>
-      <span>CVD <b class="${cls(r.cvd)}">${(r.cvd>=0?'+':'') + r.cvd.toFixed(2)}</b></span>
+      <span>CVD估 <b class="${cls(r.cvd)}">${(r.cvd>=0?'+':'') + r.cvd.toFixed(2)}</b></span>
       <span>費率 <b class="${cls(-r.fund)}">${pct(r.fund, 4)}</b></span>
       <span class="ptog">下單建議 <i>▾</i></span>
     </div>
@@ -515,15 +520,26 @@ function fire(a){
   if (armed && cfg.notify && 'Notification' in window && Notification.permission === 'granted'){
     try{ new Notification(title, {body, tag: a.id}); }catch{}
   }
-  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
+  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD估 ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
   if (!$('v-alerts').classList.contains('active')){ unseen++; renderBadge(); }
   renderAlerts();
 }
-function sendTG(text){
-  if (!cfg.tgToken || !cfg.tgChat) return Promise.resolve(false);
-  const body = new URLSearchParams({chat_id: cfg.tgChat, text});
-  return fetch(`https://api.telegram.org/bot${encodeURIComponent(cfg.tgToken).replace('%3A', ':')}/sendMessage`,
-               {method: 'POST', body, mode: 'no-cors'}).then(() => true).catch(() => false);
+// 真正檢查 Telegram 的回覆；ok:true 成功、ok:false 失敗（附原因）、ok:null 無法確認
+async function sendTG(text, token = cfg.tgToken, chat = cfg.tgChat, quiet = false){
+  if (!token || !chat) return {ok: false, msg: '尚未設定 Token 或 Chat ID'};
+  const url = `https://api.telegram.org/bot${encodeURIComponent(token).replace('%3A', ':')}/sendMessage`;
+  const body = new URLSearchParams({chat_id: chat, text});
+  let res;
+  try{
+    const r = await fetch(url, {method: 'POST', body});
+    const jj = await r.json();
+    res = jj.ok ? {ok: true} : {ok: false, msg: jj.description || ('HTTP ' + r.status)};
+  }catch(e){
+    try{ await fetch(url, {method: 'POST', body, mode: 'no-cors'}); }catch{}
+    res = {ok: null, msg: '瀏覽器讀不到 Telegram 的回覆，無法確認是否送達，請看手機有沒有收到'};
+  }
+  if (!quiet && res.ok === false) toast('Telegram 推播失敗', res.msg);
+  return res;
 }
 function toast(title, body, side){
   const el = document.createElement('div');
@@ -586,10 +602,13 @@ async function evalPending(){
     n++;
     try{
       const kl = await j('/fapi/v1/klines', {symbol: a.sym, interval: '5m', startTime: a.t, limit: need4 ? 48 : 12});
-      if (kl.length >= 12 && a.e1 == null){ a.e1 = sign*(+kl[11][4]/a.price - 1) - costF; changed = true; }
+      // 進場價用「提醒之後下一根 5 分 K 的開盤價」，比用提醒當下的收盤價更接近實際能成交的價格
+      const ent = +kl[0]?.[1] || a.price;
+      a.ent = ent;
+      if (kl.length >= 12 && a.e1 == null){ a.e1 = sign*(+kl[11][4]/ent - 1) - costF; changed = true; }
       if (need4 && kl.length >= 48){
-        a.e4 = sign*(+kl[47][4]/a.price - 1) - costF; changed = true;
-        if (a.plan && a.po == null) a.po = gradePlan(a.plan, kl, costF);
+        a.e4 = sign*(+kl[47][4]/ent - 1) - costF; changed = true;
+        if (a.plan && a.po == null) a.po = gradePlan({...a.plan, entry: ent}, kl, costF);
       }
     }catch{}
   }
@@ -686,10 +705,10 @@ $('resetBtn').onclick = () => { cfg = {...DEF, tgToken: cfg.tgToken, tgChat: cfg
 $('tgTestBtn').onclick = async () => {
   const c = readForm();
   if (!c.tgToken || !c.tgChat){ toast('Telegram', '請先填 Bot Token 和 Chat ID。'); return; }
-  const saved = cfg; cfg = {...cfg, tgToken: c.tgToken, tgChat: c.tgChat};
-  await sendTG('✅ 幣圈掃描器測試訊息：Telegram 推播設定成功');
-  cfg = saved;
-  toast('Telegram', '已送出測試訊息，請看手機有沒有收到。記得按「儲存設定」。');
+  const r = await sendTG('✅ 幣圈掃描器測試訊息：Telegram 推播設定成功', c.tgToken, c.tgChat, true);
+  if (r.ok) toast('Telegram ✅ 發送成功', '手機應該已收到。記得按「儲存設定」。');
+  else if (r.ok === null) toast('Telegram ⚠️ 無法確認', r.msg);
+  else toast('Telegram ❌ 發送失敗', r.msg + '｜Unauthorized＝Token 錯；chat not found＝Chat ID 錯或還沒先跟機器人說話');
 };
 $('clearBtn').onclick = () => {
   if (!confirm('確定清除所有提醒紀錄？回顧統計也會一起清掉。')) return;
