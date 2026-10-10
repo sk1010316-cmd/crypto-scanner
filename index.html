@@ -537,7 +537,7 @@ function fire(a){
   if (armed && cfg.notify && 'Notification' in window && Notification.permission === 'granted'){
     try{ new Notification(title, {body, tag: a.id}); }catch{}
   }
-  if (!(cfg.tgAligned && a.warn)) sendTG((a.warn ? a.warn + '\n' : '') + `${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD估 ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
+  if (!(cfg.tgAligned && a.warn)) sendTG(tgHead(a) + `${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  4h ${pct(a.r4 ?? 0)}  CVD估 ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
   if (!$('v-alerts').classList.contains('active')){ unseen++; renderBadge(); }
   renderAlerts();
 }
@@ -733,6 +733,14 @@ function regCat(side, reg){
   if (reg.includes('+hv')) return 'BTC高波動';
   if (reg.startsWith('range')) return 'BTC盤整';
   return (side === 'long') === reg.startsWith('up') ? '順大盤' : '逆大盤';
+}
+// Telegram 第一行：哪個版本＋BTC 大盤狀態＋這筆是順／逆
+function tgHead(a){
+  const T = {up: '多頭↑', down: '空頭↓', range: '盤整↔'};
+  const cat = regCat(a.side, a.reg);
+  const icon = {'順大盤': '✅', '逆大盤': '⚠️', 'BTC盤整': '↔️', 'BTC高波動': '⚡', '未標記': '❔'}[cat];
+  const btc = a.reg ? `BTC ${T[a.reg.split('+')[0]]}${a.reg.includes('+hv') ? ' 高波動' : ''}` : 'BTC 狀態未知';
+  return `【${PAGE === 'rev' ? '反轉版' : '順勢版'}】${btc}｜${icon} ${cat}\n` + (a.warn ? a.warn + '\n' : '');
 }
 const CAT_ORDER = {'順大盤': 0, '逆大盤': 1, 'BTC盤整': 2, 'BTC高波動': 3, '未標記': 4};
 // ---------- 進階統計（4 小時結果） ----------
