@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="幣圈掃描">
+<meta name="theme-color" content="#0b0e13">
+<title>幣圈掃描器・順勢版</title>
+<style>
+:root{
+  --bg:#0b0e13;--panel:#12161e;--panel2:#181d27;--line:#232a36;--line2:#303846;
+  --text:#e6e9ef;--mute:#8a93a3;--dim:#5d6676;
+  --long:#21c07a;--long-bg:rgba(33,192,122,.12);
+  --short:#f0475b;--short-bg:rgba(240,71,91,.12);
+  --warn:#f5b73b;--warn-bg:rgba(245,183,59,.12);
+  --accent:#5b8cff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font:14px/1.45 -apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+.num{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.pos{color:var(--long)}.neg{color:var(--short)}.mute{color:var(--mute)}
+
+header{position:sticky;top:0;z-index:10;background:rgba(11,14,19,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top))}
+.hwrap{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-size:16px;margin:0;letter-spacing:.03em;display:flex;align-items:center;gap:8px}
+h1 .logo{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--long),var(--accent));display:inline-block}
+.status{color:var(--mute);font-size:12px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+.dot.live{background:var(--long);box-shadow:0 0 0 3px rgba(33,192,122,.18)}
+.dot.busy{background:var(--warn);animation:pulse 1s infinite}
+.dot.err{background:var(--short)}
+@keyframes pulse{50%{opacity:.35}}
+.spacer{flex:1}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+button:hover{border-color:var(--line2)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.armed{border-color:var(--long);color:var(--long);background:var(--long-bg)}
+button.danger{color:var(--short)}
+
+nav{max-width:1200px;margin:0 auto;display:flex;gap:2px;padding:8px 16px 0;overflow-x:auto}
+nav button{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;color:var(--mute);padding:8px 12px}
+nav button.active{color:var(--text);border-bottom-color:var(--accent)}
+nav .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--short);color:#fff;font-size:11px;line-height:18px}
+
+main{max-width:1200px;margin:0 auto;padding:12px 16px 48px}
+.view{display:none}.view.active{display:block}
+.banner{border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{background:var(--warn-bg);color:var(--warn);border:1px solid rgba(245,183,59,.3)}
+.banner.err{background:var(--short-bg);color:var(--short);border:1px solid rgba(240,71,91,.3)}
+.hidden{display:none!important}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.ph h2{font-size:14px;margin:0;display:flex;align-items:center;gap:6px}
+.ph h2.long{color:var(--long)}.ph h2.short{color:var(--short)}
+.ph small{color:var(--mute);font-size:12px}
+.empty{padding:28px 14px;text-align:center;color:var(--mute)}
+
+.row{padding:9px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:20px 1fr auto;column-gap:10px;row-gap:3px;align-items:center}
+.row:last-child{border-bottom:none}
+.row.ok{background:linear-gradient(90deg,rgba(255,255,255,.025),transparent)}
+.rk{color:var(--dim);font-size:12px;grid-row:span 2}
+.l1{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.sym{font-weight:650;color:var(--text);text-decoration:none;font-size:14px}
+.sym small{color:var(--dim);font-weight:400;font-size:11px}
+.sym:hover{text-decoration:underline}
+.px{color:var(--mute);font-size:12px}
+.tag{font-size:11px;padding:1px 6px;border-radius:4px;white-space:nowrap;background:var(--panel2);color:var(--mute)}
+.tag.LU{color:var(--long);background:var(--long-bg)}
+.tag.SU{color:var(--short);background:var(--short-bg)}
+.tag.SC,.tag.LC{color:var(--warn);background:var(--warn-bg)}
+.chk{font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px}
+.chk.long{color:#04130b;background:var(--long)}.chk.short{color:#fff;background:var(--short)}
+.sc{grid-row:span 2;text-align:right;min-width:58px}
+.sc b{font-size:17px;font-weight:650}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px}
+.l2{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--mute)}
+.l2 b{font-weight:500}
+.row{cursor:pointer}
+.ptog{margin-left:auto;color:var(--accent)}
+.ptog i{font-style:normal;display:inline-block;transition:transform .15s}
+.row.open .ptog i{transform:rotate(180deg)}
+.pdet{grid-column:1/-1;display:none;margin-top:8px}
+.row.open .pdet{display:block}
+.plan{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:default}
+.pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px}
+@media(max-width:520px){.pgrid{grid-template-columns:repeat(2,1fr)}}
+.pgrid div{display:flex;flex-direction:column;min-width:0}
+.pgrid span{color:var(--dim);font-size:11px;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif}
+.pgrid b{font-size:14px;font-weight:600;white-space:nowrap}
+.pgrid b span{font-size:14px;font-family:inherit}
+.pgrid b span.neg{color:var(--short)}.pgrid b span.pos{color:var(--long)}
+.pgrid em{font-style:normal;color:var(--mute);font-size:11px}
+.pnote{font-size:12px;color:var(--mute);margin-top:8px}
+.pnote.warn{color:var(--warn)}
+.alist .a{cursor:pointer}
+.a .pdet{grid-column:1/-1;margin-top:6px}
+.a.open .pdet{display:block}
+.a.open .ptog i{transform:rotate(180deg)}
+
+.alist .a{padding:11px 14px;border-bottom:1px solid var(--line);display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center}
+.alist .a:last-child{border-bottom:none}
+.side{font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;grid-row:span 2}
+.side.long{background:var(--long-bg);color:var(--long)}.side.short{background:var(--short-bg);color:var(--short)}
+.kind{font-size:11px;color:var(--mute);border:1px solid var(--line2);border-radius:4px;padding:0 5px;margin-right:4px}
+.ev{grid-row:span 2;text-align:right;font-size:12px;line-height:1.6}
+.ev span{display:block}
+
+table{width:100%;border-collapse:collapse}
+th,td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{color:var(--mute);font-weight:500;font-size:12px}
+th:first-child,td:first-child{text-align:left}
+tr:last-child td{border-bottom:none}
+.twrap{overflow-x:auto}
+.note{color:var(--mute);font-size:12px;padding:10px 14px;line-height:1.6}
+
+.form{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;padding:14px}
+.form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mute)}
+.form input[type=number],.form input[type=text],.form input[type=password]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:14px;width:100%}
+.form input:focus{outline:none;border-color:var(--accent)}
+.form .cb{flex-direction:row;align-items:center;gap:8px;color:var(--text);font-size:13px}
+.form h3{grid-column:1/-1;margin:6px 0 0;font-size:13px;color:var(--text);border-top:1px solid var(--line);padding-top:12px}
+.form h3:first-child{border-top:none;padding-top:0;margin-top:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px}
+
+#toasts{position:fixed;right:16px;bottom:max(16px,env(safe-area-inset-bottom));z-index:50;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}
+.toast{background:var(--panel2);border:1px solid var(--line2);border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.4);cursor:pointer;animation:in .25s ease-out;font-size:13px}
+.toast.long{border-left-color:var(--long)}.toast.short{border-left-color:var(--short)}
+.toast b{display:block;margin-bottom:2px}
+@keyframes in{from{transform:translateY(10px);opacity:0}}
+footer{max-width:1200px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <div class="hwrap">
+    <h1><span class="logo"></span>幣圈掃描器・順勢版</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">尚未掃描</span></div>
+    <div class="spacer"></div>
+    <button id="armBtn">🔔 啟用提醒</button>
+    <button id="scanBtn" class="primary">立即掃描</button>
+  </div>
+</header>
+<nav>
+  <button data-view="rank" class="active">多空排行</button>
+  <button data-view="alerts">提醒紀錄<span class="badge hidden" id="badge">0</span></button>
+  <button data-view="stats">回顧統計</button>
+  <button data-view="settings">設定</button>
+</nav>
+<main>
+  <div class="banner err hidden" id="errBanner"></div>
+  <div class="banner warn" id="armBanner">順勢版（舊版追強勢邏輯），和反轉版同時跑來比較實盤表現。點上方「🔔 啟用提醒」才會有聲音和桌面通知。iPhone 想在鎖屏收到提醒，請到「設定」填 Telegram。</div>
+
+  <section class="view active" id="v-rank">
+    <div class="grid2">
+      <div class="panel">
+        <div class="ph"><h2 class="long">▲ 做多推薦</h2><small>✓ 價格、OI、CVD 同向</small></div>
+        <div id="longList"><div class="empty">掃描中…</div></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><h2 class="short">▼ 做空推薦</h2><small>✓ 價格、OI、CVD 同向</small></div>
+        <div id="shortList"><div class="empty">掃描中…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-alerts">
+    <div class="panel">
+      <div class="ph"><h2>提醒紀錄</h2>
+        <div style="display:flex;gap:6px"><button id="csvBtn">匯出 CSV</button><button id="clearBtn" class="danger">清除</button></div>
+      </div>
+      <div class="alist" id="alertList"></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-stats">
+    <div class="panel">
+      <div class="ph"><h2>提醒後表現</h2><small id="statsMeta"></small></div>
+      <div class="twrap"><table id="statsTable"></table></div>
+      <div class="note">以提醒當下價格為進場，計算 1 小時、4 小時後順著提醒方向的報酬，已扣除設定裡的來回成本。網頁開著時會自動補算，每次最多 15 筆。樣本少於 30 筆的結果參考價值很低。</div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <div class="ph"><h2>照下單建議執行的結果</h2><small>止損 / 止盈 / 4h 時間停損</small></div>
+      <div class="twrap"><table id="planTable"></table></div>
+      <div class="note">R = 以止損距離為單位的損益（−1R 就是剛好打到止損）。平均 R 大於 0 才代表這套計畫長期有正期望值；帳戶影響 = 平均 R × 每筆風險 %。</div>
+    </div>
+  </section>
+
+  <section class="view" id="v-settings">
+    <div class="panel">
+      <div class="form" id="form">
+        <h3>掃描範圍</h3>
+        <label>成交額前 N 名<input type="number" data-k="topN" min="10" max="200" step="10"></label>
+        <label>24h 成交額下限（百萬 USDT）<input type="number" data-k="minQVm" min="0" step="5"></label>
+        <label>掃描間隔（分鐘）<input type="number" data-k="interval" min="1" max="60"></label>
+        <h3>推薦提醒</h3>
+        <label>分數門檻（0–100）<input type="number" data-k="alertScore" min="50" max="100"></label>
+        <label>同幣種同方向冷卻（分鐘）<input type="number" data-k="cooldown" min="5" step="5"></label>
+        <h3>異常警報</h3>
+        <label>單根 5 分 K 漲跌幅（%）<input type="number" data-k="spikePct" min="0.5" step="0.5"></label>
+        <label>成交量倍數（× 中位數）<input type="number" data-k="spikeVol" min="1" step="0.5"></label>
+        <h3>下單建議（止損 / 止盈 / 倉位 / 槓桿）</h3>
+        <label>帳戶資金（USDT，0 = 不算倉位）<input type="number" data-k="equity" min="0" step="100"></label>
+        <label>每筆最多虧損（帳戶 %）<input type="number" data-k="riskPct" min="0.1" max="5" step="0.1"></label>
+        <label>止損距離（ATR 倍數）<input type="number" data-k="slAtr" min="0.5" step="0.5"></label>
+        <label>止盈（止損距離的 R 倍數）<input type="number" data-k="tpR" min="0.5" step="0.5"></label>
+        <label>槓桿上限（x）<input type="number" data-k="maxLev" min="1" max="50"></label>
+        <label>單筆保證金上限（帳戶 %）<input type="number" data-k="marginPct" min="5" max="100" step="5"></label>
+        <label>維持保證金率（%，估強平用）<input type="number" data-k="mmr" min="0" step="0.1"></label>
+        <h3>回顧統計</h3>
+        <label>來回成本（%，手續費＋滑價）<input type="number" data-k="cost" min="0" step="0.01"></label>
+        <h3>提醒方式</h3>
+        <label class="cb"><input type="checkbox" data-k="sound">提醒音效</label>
+        <label class="cb"><input type="checkbox" data-k="notify">桌面通知</label>
+        <label class="cb"><input type="checkbox" data-k="wake">保持螢幕常亮（手機開著網頁時）</label>
+        <h3>Telegram 推播（iPhone 鎖屏提醒用）</h3>
+        <label>Bot Token<input type="password" data-k="tgToken" autocomplete="off" placeholder="123456:ABC..."></label>
+        <label>Chat ID<input type="text" data-k="tgChat" autocomplete="off" placeholder="123456789"></label>
+      </div>
+      <div class="actions">
+        <button class="primary" id="saveBtn">儲存設定</button>
+        <button id="tgTestBtn">測試 Telegram</button>
+        <button id="resetBtn">恢復預設</button>
+      </div>
+      <div class="note">設定與 Token 只存在這台裝置的瀏覽器裡，不會上傳到 GitHub。電腦和手機各自要設定一次。</div>
+    </div>
+  </section>
+</main>
+<footer>資料來源：Binance USDⓈ-M 永續合約公開 API。僅為統計篩選，非投資建議。</footer>
+<div id="toasts"></div>
+
+<script>
+const API = 'https://fapi.binance.com';
+const DEF = {topN:80, minQVm:20, interval:5, alertScore:75, cooldown:60, spikePct:3, spikeVol:3,
+             cost:0.1, sound:true, notify:true, wake:false, tgToken:'', tgChat:'',
+             equity:0, riskPct:1, slAtr:1.5, tpR:2, maxLev:10, marginPct:30, mmr:0.5};
+const HOLD_BARS = 48;   // 時間停損：4 小時（48 根 5 分 K），與回測一致
+const W = {ret:.25, oi:.25, cvd:.25, vol:.15, fund:.10};
+const STRUCT = {LU:'多頭增倉', SC:'空頭回補', SU:'空頭增倉', LC:'多頭平倉'};
+const MAX_ALERTS = 1000;
+
+// 順勢版的資料另外存（m_ 開頭），不和反轉版互相覆蓋
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('m_' + k); return v == null ? d : JSON.parse(v); }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem('m_' + k, JSON.stringify(v)); }catch{} }
+};
+let cfg = {...DEF, ...LS.get('cfg', {})};
+let alerts = LS.get('alerts', []);   // 新的在前
+let cool = LS.get('cool', {});
+let rows = [], tradable = null, tradableAt = 0;
+let timer = null, nextAt = 0, scanning = false, lastScan = 0, lastErr = '';
+let audioCtx = null, armed = false, wakeLock = null, unseen = 0;
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = (x, d=2) => (x >= 0 ? '+' : '') + (x*100).toFixed(d) + '%';
+const cls = x => x > 0 ? 'pos' : x < 0 ? 'neg' : '';
+const fmtPx = p => p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(4).replace(/0+$/,'').replace(/\.$/,'') : p.toPrecision(4);
+const hhmm = t => new Date(t).toLocaleTimeString('zh-TW', {hour:'2-digit', minute:'2-digit', hour12:false});
+const mdhm = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${hhmm(t)}`; };
+const base = s => s.replace(/USDT$/, '');
+const median = a => { const s = [...a].sort((x,y)=>x-y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
+const sum = a => a.reduce((x,y)=>x+y, 0);
+
+// ---------- 資料 ----------
+async function j(path, params){
+  const u = new URL(API + path);
+  if (params) for (const [k,v] of Object.entries(params)) u.searchParams.set(k, v);
+  for (let i = 0; i < 3; i++){
+    try{
+      const r = await fetch(u);
+      if (r.status === 429 || r.status === 418){ await sleep(4000*(i+1)); continue; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    }catch(e){ if (i === 2) throw e; await sleep(800*(i+1)); }
+  }
+  throw new Error('請求失敗');
+}
+async function pool(items, n, fn){
+  const out = new Array(items.length); let idx = 0;
+  await Promise.all(Array.from({length:n}, async () => {
+    while (idx < items.length){ const i = idx++; try{ out[i] = await fn(items[i]); }catch{ out[i] = null; } }
+  }));
+  return out;
+}
+async function universe(){
+  if (!tradable || Date.now() - tradableAt > 3600e3){
+    const info = await j('/fapi/v1/exchangeInfo');
+    tradable = new Set(info.symbols.filter(s => s.contractType === 'PERPETUAL' && s.quoteAsset === 'USDT' && s.status === 'TRADING').map(s => s.symbol));
+    tradableAt = Date.now();
+  }
+  const t = (await j('/fapi/v1/ticker/24hr')).filter(x => tradable.has(x.symbol) && +x.quoteVolume >= cfg.minQVm * 1e6);
+  t.sort((a,b) => b.quoteVolume - a.quoteVolume);
+  return t.slice(0, cfg.topN).map(x => ({symbol:x.symbol, chg24:+x.priceChangePercent/100}));
+}
+async function fetchSym(u){
+  const [k0, oi] = await Promise.all([
+    j('/fapi/v1/klines', {symbol:u.symbol, interval:'5m', limit:49}),
+    j('/futures/data/openInterestHist', {symbol:u.symbol, period:'5m', limit:13})
+  ]);
+  const kl = k0.slice(0, -1);              // 去掉未收盤 K 棒
+  if (kl.length < 24 || oi.length < 2) return null;
+  const c = kl.map(k=>+k[4]), v = kl.map(k=>+k[5]), b = kl.map(k=>+k[9]), o = oi.map(x=>+x.sumOpenInterest);
+  const hi = kl.map(k=>+k[2]), lo = kl.map(k=>+k[3]);
+  const n = kl.length, v12 = sum(v.slice(-12));
+  let tr = 0; for (let i = n-14; i < n; i++) tr += Math.max(hi[i]-lo[i], Math.abs(hi[i]-c[i-1]), Math.abs(lo[i]-c[i-1]));
+  const atr = tr / 14;                      // 5 分 K ATR(14)
+  let d12 = 0; for (let i = n-12; i < n; i++) d12 += 2*b[i] - v[i];   // CVD 變化
+  const baseVol = median(v.slice(0,-3)) || 1e-12, prevMed = median(v.slice(0,-1)) || 1e-12;
+  return {...u, price:c[n-1], ts:+kl[n-1][6] + 1, atr,
+    r5:c[n-1]/c[n-2]-1, r1:c[n-1]/c[n-13]-1, r4:c[n-1]/c[0]-1,
+    oi1: o[0] ? o[o.length-1]/o[0]-1 : 0,
+    cvd: v12 ? d12/v12 : 0,
+    vr: (sum(v.slice(-3))/3)/baseVol,
+    lvm: v[n-1]/prevMed};
+}
+
+// ---------- 評分 ----------
+function pctRank(vals){
+  const n = vals.length, order = [...vals.keys()].sort((a,b) => vals[a]-vals[b]), r = new Array(n).fill(.5);
+  order.forEach((i, k) => r[i] = n > 1 ? k/(n-1) : .5);
+  return r;
+}
+function scoreAll(rs){
+  const ret = pctRank(rs.map(r=>r.r1)), oi = pctRank(rs.map(r=>r.oi1)), cvd = pctRank(rs.map(r=>r.cvd)),
+        vol = pctRank(rs.map(r=>r.vr)), fund = pctRank(rs.map(r=>r.fund));
+  rs.forEach((r, i) => {
+    r.ls = 100*(W.ret*ret[i] + W.oi*oi[i] + W.cvd*cvd[i] + W.vol*vol[i] + W.fund*(1-fund[i]));
+    r.ss = 100*(W.ret*(1-ret[i]) + W.oi*oi[i] + W.cvd*(1-cvd[i]) + W.vol*vol[i] + W.fund*fund[i]);
+    r.st = r.r1 > 0 ? (r.oi1 > 0 ? 'LU' : 'SC') : (r.oi1 > 0 ? 'SU' : 'LC');
+    r.lok = r.r1 > 0 && r.oi1 > 0 && r.cvd > 0;
+    r.sok = r.r1 < 0 && r.oi1 > 0 && r.cvd < 0;
+  });
+  return rs;
+}
+
+// ---------- 掃描 ----------
+async function scan(){
+  if (scanning) return;
+  scanning = true; setStatus(); $('scanBtn').disabled = true;
+  try{
+    const uni = await universe();
+    const fr = Object.fromEntries((await j('/fapi/v1/premiumIndex')).map(p => [p.symbol, +p.lastFundingRate]));
+    const got = (await pool(uni, 8, fetchSym)).filter(Boolean);
+    if (got.length < 5) throw new Error('取得的幣種資料太少（' + got.length + ' 檔）');
+    got.forEach(r => r.fund = fr[r.symbol] ?? 0);
+    rows = scoreAll(got);
+    lastScan = Date.now(); lastErr = '';
+    $('errBanner').classList.add('hidden');
+    renderRank();
+    findAlerts(rows).forEach(fire);
+    evalPending().catch(()=>{});
+  }catch(e){
+    lastErr = e.message || String(e);
+    const b = $('errBanner');
+    b.textContent = '無法取得幣安資料：' + lastErr + '。若持續發生，可能是網路或所在地區被幣安限制（例如開了美國 VPN）。';
+    b.classList.remove('hidden');
+  }finally{
+    scanning = false; $('scanBtn').disabled = false; schedule(); setStatus();
+  }
+}
+function schedule(){
+  clearTimeout(timer);
+  const step = cfg.interval * 60e3;
+  nextAt = Math.ceil((Date.now() + 1000) / step) * step + 20e3;   // 對齊 K 棒收盤後 20 秒
+  timer = setTimeout(scan, nextAt - Date.now());
+}
+function setStatus(){
+  const dot = $('dot');
+  dot.className = 'dot ' + (scanning ? 'busy' : lastErr ? 'err' : lastScan ? 'live' : '');
+  if (scanning){ $('statusText').textContent = '掃描中…'; return; }
+  const left = Math.max(0, nextAt - Date.now()), m = Math.floor(left/60e3), s = Math.floor(left/1e3) % 60;
+  const parts = [];
+  if (lastScan) parts.push('更新 ' + hhmm(lastScan), rows.length + ' 檔');
+  else if (lastErr) parts.push('連線失敗');
+  if (nextAt) parts.push('下次 ' + m + ':' + String(s).padStart(2,'0'));
+  $('statusText').textContent = parts.join(' · ') || '尚未掃描';
+}
+
+// ---------- 下單建議 ----------
+// 止損 = 進場 ∓ ATR × 倍數；止盈 = 止損距離 × R 倍數；4 小時沒碰到就時間出場。
+// 倉位由「每筆最多虧帳戶幾 %」反推；槓桿取「保證金不超過上限」所需的最低倍數，
+// 且必須讓強平價離進場至少是止損距離的 2 倍。
+function plan(price, atr, side){
+  if (!(atr > 0) || !(price > 0)) return null;
+  const sign = side === 'long' ? 1 : -1;
+  const slDist = cfg.slAtr * atr, slPct = slDist / price, mmr = cfg.mmr / 100;
+  if (slPct >= 0.3) return null;            // 資料異常保護
+  const P = {side, entry: price, sl: price - sign*slDist, tp: price + sign*slDist*cfg.tpR,
+             slPct, tpPct: slPct*cfg.tpR, rr: cfg.tpR,
+             safeMax: Math.max(1, Math.floor(1 / (2*slPct + mmr))), warn: ''};
+  if (slPct > 0.08) P.warn = '止損距離超過 8%，這檔波動過大，建議跳過';
+  if (!(cfg.equity > 0)) return P;
+  const cap = Math.max(1, Math.min(cfg.maxLev, P.safeMax));
+  let notional = (cfg.equity * cfg.riskPct / 100) / slPct;
+  const marginCap = cfg.equity * cfg.marginPct / 100;
+  let lev = Math.max(1, Math.ceil(notional / marginCap));
+  if (lev > cap){
+    lev = cap; notional = marginCap * cap;
+    P.warn ||= `受槓桿上限 ${cap}x 限制，倉位已縮小，實際風險低於設定`;
+  }
+  Object.assign(P, {lev, notional, qty: notional / price, margin: notional / lev,
+    loss: notional * slPct, gain: notional * P.tpPct,
+    liq: side === 'long' ? price*(1 - 1/lev + mmr) : price*(1 + 1/lev - mmr)});
+  return P;
+}
+const money = x => '$' + (x >= 100 ? x.toFixed(0) : x.toFixed(2));
+const fmtQty = q => q >= 100 ? q.toFixed(0) : q >= 1 ? q.toFixed(2) : q.toPrecision(3);
+function planHTML(P){
+  if (!P) return '<div class="plan"><span class="mute">ATR 資料不足，無法計算</span></div>';
+  const long = P.side === 'long';
+  let h = `<div class="plan">
+    <div class="pgrid num">
+      <div><span>進場（市價）</span><b>${fmtPx(P.entry)}</b></div>
+      <div><span>止損</span><b class="neg">${fmtPx(P.sl)}</b><em>${long ? '−' : '+'}${(P.slPct*100).toFixed(2)}%</em></div>
+      <div><span>止盈（${P.rr}R）</span><b class="pos">${fmtPx(P.tp)}</b><em>${long ? '+' : '−'}${(P.tpPct*100).toFixed(2)}%</em></div>
+      <div><span>時間停損</span><b>4 小時</b><em>都沒碰到就平倉</em></div>`;
+  if (P.lev){
+    h += `<div><span>建議槓桿（逐倉）</span><b>${P.lev}x</b><em>最高安全 ${P.safeMax}x</em></div>
+      <div><span>數量 / 名目</span><b>${fmtQty(P.qty)}</b><em>${money(P.notional)}</em></div>
+      <div><span>保證金</span><b>${money(P.margin)}</b><em>預估強平 ${fmtPx(P.liq)}</em></div>
+      <div><span>止損虧 / 止盈賺</span><b><span class="neg">−${money(P.loss)}</span> / <span class="pos">+${money(P.gain)}</span></b><em>未含手續費</em></div>`;
+  }
+  h += `</div>`;
+  if (!P.lev) h += `<div class="pnote">到「設定」填入帳戶資金，才會算數量、保證金和槓桿。</div>`;
+  if (P.warn) h += `<div class="pnote warn">⚠ ${esc(P.warn)}</div>`;
+  return h + `</div>`;
+}
+const planText = P => !P ? '' :
+  `\n進場 ${fmtPx(P.entry)}｜止損 ${fmtPx(P.sl)}（${(P.slPct*100).toFixed(2)}%）｜止盈 ${fmtPx(P.tp)}（${P.rr}R）｜4h 時間停損` +
+  (P.lev ? `\n逐倉 ${P.lev}x｜數量 ${fmtQty(P.qty)}｜保證金 ${money(P.margin)}｜止損虧 ${money(P.loss)}` : '') +
+  (P.warn ? `\n⚠ ${P.warn}` : '');
+
+// ---------- 排行 ----------
+function rowHTML(r, i, side){
+  const sc = side === 'long' ? r.ls : r.ss, ok = side === 'long' ? r.lok : r.sok;
+  const color = side === 'long' ? 'var(--long)' : 'var(--short)';
+  const key = side + '|' + r.symbol;
+  return `<div class="row${ok ? ' ok' : ''}${openRows.has(key) ? ' open' : ''}" data-key="${esc(key)}">
+    <div class="rk num">${i+1}</div>
+    <div class="l1">
+      <a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(r.symbol)}" target="_blank" rel="noopener">${esc(base(r.symbol))}<small>USDT</small></a>
+      <span class="px num">${fmtPx(r.price)}</span>
+      <span class="tag ${r.st}">${STRUCT[r.st]}</span>
+      ${ok ? `<span class="chk ${side}">✓ 結構一致</span>` : ''}
+    </div>
+    <div class="sc"><b class="num" style="color:${sc >= cfg.alertScore && ok ? color : 'var(--text)'}">${sc.toFixed(1)}</b>
+      <div class="bar"><i style="width:${sc.toFixed(1)}%;background:${color}"></i></div></div>
+    <div class="l2 num">
+      <span>1h <b class="${cls(r.r1)}">${pct(r.r1)}</b></span>
+      <span>OI <b class="${cls(r.oi1)}">${pct(r.oi1)}</b></span>
+      <span>CVD <b class="${cls(r.cvd)}">${(r.cvd>=0?'+':'') + r.cvd.toFixed(2)}</b></span>
+      <span>量比 <b>${r.vr.toFixed(1)}</b></span>
+      <span>費率 <b class="${cls(-r.fund)}">${pct(r.fund, 4)}</b></span>
+      <span class="ptog">下單建議 <i>▾</i></span>
+    </div>
+    <div class="pdet">${planHTML(plan(r.price, r.atr, side))}</div>
+  </div>`;
+}
+const openRows = new Set();
+function bindRowToggle(el){
+  el.addEventListener('click', e => {
+    if (e.target.closest('a')) return;
+    if (e.target.closest('.plan')) return;
+    const row = e.target.closest('.row, .a');
+    if (!row) return;
+    const k = row.dataset.key;
+    row.classList.toggle('open') ? openRows.add(k) : openRows.delete(k);
+  });
+}
+function renderRank(){
+  const top = (key) => [...rows].sort((a,b) => b[key]-a[key]).slice(0, 10);
+  $('longList').innerHTML = rows.length ? top('ls').map((r,i) => rowHTML(r,i,'long')).join('') : '<div class="empty">沒有資料</div>';
+  $('shortList').innerHTML = rows.length ? top('ss').map((r,i) => rowHTML(r,i,'short')).join('') : '<div class="empty">沒有資料</div>';
+}
+
+// ---------- 提醒 ----------
+function findAlerts(rs){
+  const now = Date.now(), cd = cfg.cooldown * 60e3, out = [];
+  const push = (kind, side, r, score, reason) => {
+    const key = `${r.symbol}|${kind}|${side}`;
+    if (now - (cool[key] || 0) < cd) return;
+    cool[key] = now;
+    out.push({id: now + '-' + key, t: r.ts, sym: r.symbol, kind, side, price: r.price, score: +score.toFixed(1),
+              reason, r1: r.r1, oi1: r.oi1, cvd: r.cvd, fund: r.fund, atr: r.atr, plan: plan(r.price, r.atr, side)});
+  };
+  for (const r of rs){
+    if (r.lok && r.ls >= cfg.alertScore) push('推薦', 'long', r, r.ls, STRUCT[r.st]);
+    if (r.sok && r.ss >= cfg.alertScore) push('推薦', 'short', r, r.ss, STRUCT[r.st]);
+    if (Math.abs(r.r5)*100 >= cfg.spikePct && r.lvm >= cfg.spikeVol)
+      push('異動', r.r5 > 0 ? 'long' : 'short', r, 0, `5m ${pct(r.r5)} 量 ×${r.lvm.toFixed(1)}`);
+  }
+  for (const k in cool) if (now - cool[k] > 24*3600e3) delete cool[k];
+  LS.set('cool', cool);
+  return out;
+}
+function fire(a){
+  alerts.unshift(a);
+  if (alerts.length > MAX_ALERTS) alerts.length = MAX_ALERTS;
+  LS.set('alerts', alerts);
+  const sideTxt = a.side === 'long' ? '做多' : '做空';
+  const title = `[${a.kind}] ${sideTxt} ${base(a.sym)}`;
+  const body = `${fmtPx(a.price)}｜${a.reason}` + (a.kind === '推薦' ? `｜分數 ${a.score}` : '') +
+    (a.plan ? `｜止損 ${fmtPx(a.plan.sl)} 止盈 ${fmtPx(a.plan.tp)}` + (a.plan.lev ? ` ${a.plan.lev}x` : '') : '');
+  toast(title, body, a.side);
+  beep(a.side);
+  if (armed && cfg.notify && 'Notification' in window && Notification.permission === 'granted'){
+    try{ new Notification(title, {body, tag: a.id}); }catch{}
+  }
+  sendTG(`${a.side === 'long' ? '🟢' : '🔴'} ${title}\n價格 ${fmtPx(a.price)}｜${a.reason}\n1h ${pct(a.r1)}  OI ${pct(a.oi1)}  CVD ${(a.cvd>=0?'+':'') + a.cvd.toFixed(2)}  費率 ${pct(a.fund,4)}` + (a.kind === '推薦' ? `\n分數 ${a.score}` : '') + planText(a.plan));
+  if (!$('v-alerts').classList.contains('active')){ unseen++; renderBadge(); }
+  renderAlerts();
+}
+function sendTG(text){
+  if (!cfg.tgToken || !cfg.tgChat) return Promise.resolve(false);
+  const body = new URLSearchParams({chat_id: cfg.tgChat, text});
+  return fetch(`https://api.telegram.org/bot${encodeURIComponent(cfg.tgToken).replace('%3A', ':')}/sendMessage`,
+               {method: 'POST', body, mode: 'no-cors'}).then(() => true).catch(() => false);
+}
+function toast(title, body, side){
+  const el = document.createElement('div');
+  el.className = 'toast ' + (side || '');
+  el.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
+  el.onclick = () => el.remove();
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 15000);
+}
+function beep(side){
+  if (!audioCtx || !cfg.sound) return;
+  const t = audioCtx.currentTime;
+  const f = side === 'long' ? [784, 1047] : [698, 466];
+  f.forEach((hz, i) => {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), d = i * .18;
+    o.frequency.value = hz;
+    g.gain.setValueAtTime(.0001, t+d); g.gain.exponentialRampToValueAtTime(.25, t+d+.02); g.gain.exponentialRampToValueAtTime(.0001, t+d+.16);
+    o.connect(g).connect(audioCtx.destination); o.start(t+d); o.stop(t+d+.18);
+  });
+}
+function renderBadge(){ const b = $('badge'); b.textContent = unseen; b.classList.toggle('hidden', !unseen); }
+function renderAlerts(){
+  if (!alerts.length){ $('alertList').innerHTML = '<div class="empty">還沒有提醒。符合條件的標的出現時會記錄在這裡。</div>'; return; }
+  $('alertList').innerHTML = alerts.slice(0, 200).map(a => {
+    const ev = (x, h) => x == null ? `<span class="mute">${h} 待算</span>` : `<span class="${cls(x)}">${h} ${pct(x)}</span>`;
+    return `<div class="a${openRows.has('a|' + a.id) ? ' open' : ''}" data-key="${esc('a|' + a.id)}">
+      <span class="side ${a.side}">${a.side === 'long' ? '做多' : '做空'}</span>
+      <div><span class="kind">${esc(a.kind)}</span><a class="sym" href="https://www.binance.com/zh-TC/futures/${esc(a.sym)}" target="_blank" rel="noopener">${esc(base(a.sym))}</a>
+        <span class="px num"> ${fmtPx(a.price)}</span></div>
+      <div class="ev num">${ev(a.e1, '1h')}${ev(a.e4, '4h')}</div>
+      <div class="l2 num"><span>${mdhm(a.t)}</span><span>${esc(a.reason)}</span>${a.kind === '推薦' ? `<span>分數 ${a.score}</span>` : ''}${
+        a.po ? `<span>計畫結果 <b class="${cls(a.po.pct)}">${{TP:'止盈', SL:'止損', TIME:'時間出場'}[a.po.out]} ${pct(a.po.pct)}（${a.po.r >= 0 ? '+' : ''}${a.po.r.toFixed(2)}R）</b></span>` : ''}${
+        a.plan ? `<span class="ptog">下單建議 <i>▾</i></span>` : ''}</div>
+      ${a.plan ? `<div class="pdet">${planHTML(a.plan)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ---------- 回顧統計 ----------
+// 逐根檢查 5 分 K 的最高 / 最低價；同一根同時碰到止損和止盈，保守算止損
+function gradePlan(P, kl, costF){
+  const long = P.side === 'long';
+  let exit = +kl[HOLD_BARS-1][4], out = 'TIME';
+  for (let i = 0; i < HOLD_BARS; i++){
+    const hi = +kl[i][2], lo = +kl[i][3];
+    if (long ? lo <= P.sl : hi >= P.sl){ exit = P.sl; out = 'SL'; break; }
+    if (long ? hi >= P.tp : lo <= P.tp){ exit = P.tp; out = 'TP'; break; }
+  }
+  const p = (long ? 1 : -1) * (exit / P.entry - 1) - costF;
+  return {out, pct: p, r: p / P.slPct};
+}
+async function evalPending(){
+  const now = Date.now(), costF = cfg.cost / 100;
+  let n = 0, changed = false;
+  for (const a of alerts){
+    if (n >= 15) break;
+    const age = now - a.t, sign = a.side === 'long' ? 1 : -1;
+    const need4 = a.e4 == null && age >= 4*3600e3 + 300e3, need1 = a.e1 == null && age >= 3600e3 + 300e3;
+    if (!need4 && !need1) continue;
+    n++;
+    try{
+      const kl = await j('/fapi/v1/klines', {symbol: a.sym, interval: '5m', startTime: a.t, limit: need4 ? 48 : 12});
+      if (kl.length >= 12 && a.e1 == null){ a.e1 = sign*(+kl[11][4]/a.price - 1) - costF; changed = true; }
+      if (need4 && kl.length >= 48){
+        a.e4 = sign*(+kl[47][4]/a.price - 1) - costF; changed = true;
+        if (a.plan && a.po == null) a.po = gradePlan(a.plan, kl, costF);
+      }
+    }catch{}
+  }
+  if (changed){ LS.set('alerts', alerts); renderAlerts(); renderStats(); }
+}
+function renderStats(){
+  const groups = {};
+  for (const a of alerts){
+    const k = a.kind + '|' + a.side;
+    (groups[k] ||= {kind: a.kind, side: a.side, e1: [], e4: [], n: 0}).n++;
+    if (a.e1 != null) groups[k].e1.push(a.e1);
+    if (a.e4 != null) groups[k].e4.push(a.e4);
+  }
+  const cell = v => v.length
+    ? `<td class="num">${v.length}</td><td class="num">${(v.filter(x=>x>0).length/v.length*100).toFixed(1)}%</td><td class="num ${cls(sum(v))}">${pct(sum(v)/v.length, 3)}</td>`
+    : '<td class="num mute">0</td><td class="mute">–</td><td class="mute">–</td>';
+  const list = Object.values(groups).sort((a,b) => (a.kind+a.side).localeCompare(b.kind+b.side));
+  $('statsMeta').textContent = `共 ${alerts.length} 筆提醒`;
+  $('statsTable').innerHTML = list.length
+    ? `<tr><th>類型</th><th>總筆數</th><th>1h 筆數</th><th>1h 勝率</th><th>1h 平均</th><th>4h 筆數</th><th>4h 勝率</th><th>4h 平均</th></tr>` +
+      list.map(g => `<tr><td>${esc(g.kind)} <span class="${g.side === 'long' ? 'pos' : 'neg'}">${g.side === 'long' ? '做多' : '做空'}</span></td><td class="num">${g.n}</td>${cell(g.e1)}${cell(g.e4)}</tr>`).join('')
+    : '<tr><td class="mute" style="text-align:center;padding:24px">還沒有資料</td></tr>';
+
+  const pg = {};
+  for (const a of alerts){
+    if (!a.po) continue;
+    (pg[a.kind + '|' + a.side] ||= {kind: a.kind, side: a.side, v: []}).v.push(a.po);
+  }
+  const pl = Object.values(pg).sort((a,b) => (a.kind+a.side).localeCompare(b.kind+b.side));
+  const rate = (v, o) => (v.filter(x => x.out === o).length / v.length * 100).toFixed(0) + '%';
+  $('planTable').innerHTML = pl.length
+    ? `<tr><th>類型</th><th>筆數</th><th>止盈</th><th>止損</th><th>時間出場</th><th>平均淨報酬</th><th>平均 R</th><th>帳戶影響/筆</th></tr>` +
+      pl.map(g => { const r = sum(g.v.map(x => x.r)) / g.v.length;
+        return `<tr><td>${esc(g.kind)} <span class="${g.side === 'long' ? 'pos' : 'neg'}">${g.side === 'long' ? '做多' : '做空'}</span></td>
+        <td class="num">${g.v.length}</td><td class="num">${rate(g.v,'TP')}</td><td class="num">${rate(g.v,'SL')}</td><td class="num">${rate(g.v,'TIME')}</td>
+        <td class="num ${cls(sum(g.v.map(x=>x.pct)))}">${pct(sum(g.v.map(x => x.pct)) / g.v.length, 3)}</td>
+        <td class="num ${cls(r)}">${r >= 0 ? '+' : ''}${r.toFixed(2)}R</td>
+        <td class="num ${cls(r)}">${pct(r * cfg.riskPct / 100, 2)}</td></tr>`; }).join('')
+    : '<tr><td class="mute" style="text-align:center;padding:24px">提醒滿 4 小時後才會有結果</td></tr>';
+}
+
+// ---------- 設定 ----------
+function fillForm(){
+  document.querySelectorAll('#form [data-k]').forEach(el => {
+    const v = cfg[el.dataset.k];
+    if (el.type === 'checkbox') el.checked = !!v; else el.value = v;
+  });
+}
+function readForm(){
+  const c = {...cfg};
+  document.querySelectorAll('#form [data-k]').forEach(el => {
+    const k = el.dataset.k;
+    if (el.type === 'checkbox') c[k] = el.checked;
+    else if (el.type === 'number'){ const x = parseFloat(el.value); c[k] = isFinite(x) ? x : DEF[k]; }
+    else c[k] = el.value.trim();
+  });
+  c.interval = Math.max(1, Math.round(c.interval));
+  c.topN = Math.max(10, Math.min(200, Math.round(c.topN)));
+  return c;
+}
+async function applyWake(){
+  try{
+    if (cfg.wake && armed && 'wakeLock' in navigator && document.visibilityState === 'visible' && !wakeLock){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => wakeLock = null);
+    } else if (!cfg.wake && wakeLock){ await wakeLock.release(); wakeLock = null; }
+  }catch{}
+}
+
+// ---------- 事件 ----------
+document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'v-' + btn.dataset.view));
+  if (btn.dataset.view === 'alerts'){ unseen = 0; renderBadge(); }
+  if (btn.dataset.view === 'stats') renderStats();
+});
+$('scanBtn').onclick = scan;
+$('armBtn').onclick = async () => {
+  try{ audioCtx ||= new (window.AudioContext || window.webkitAudioContext)(); await audioCtx.resume(); }catch{}
+  if ('Notification' in window && Notification.permission === 'default'){ try{ await Notification.requestPermission(); }catch{} }
+  armed = true;
+  $('armBtn').textContent = '🔔 提醒已啟用'; $('armBtn').classList.add('armed');
+  $('armBanner').classList.add('hidden');
+  beep('long'); applyWake();
+};
+$('saveBtn').onclick = () => {
+  const old = cfg.interval;
+  cfg = readForm(); LS.set('cfg', cfg); fillForm();
+  if (cfg.interval !== old) schedule();
+  applyWake(); renderRank();
+  toast('已儲存', '設定已存在這台裝置。');
+};
+$('resetBtn').onclick = () => { cfg = {...DEF, tgToken: cfg.tgToken, tgChat: cfg.tgChat}; LS.set('cfg', cfg); fillForm(); schedule(); toast('已恢復預設', 'Telegram 設定保留。'); };
+$('tgTestBtn').onclick = async () => {
+  const c = readForm();
+  if (!c.tgToken || !c.tgChat){ toast('Telegram', '請先填 Bot Token 和 Chat ID。'); return; }
+  const saved = cfg; cfg = {...cfg, tgToken: c.tgToken, tgChat: c.tgChat};
+  await sendTG('✅ 幣圈掃描器測試訊息：Telegram 推播設定成功');
+  cfg = saved;
+  toast('Telegram', '已送出測試訊息，請看手機有沒有收到。記得按「儲存設定」。');
+};
+$('clearBtn').onclick = () => {
+  if (!confirm('確定清除所有提醒紀錄？回顧統計也會一起清掉。')) return;
+  alerts = []; LS.set('alerts', alerts); renderAlerts(); renderStats();
+};
+$('csvBtn').onclick = () => {
+  const head = ['時間','幣種','類型','方向','價格','分數','原因','1h漲跌','OI變化','CVD','費率','1h後報酬','4h後報酬',
+                '止損','止盈','建議槓桿','計畫結果','計畫報酬','計畫R'];
+  const lines = alerts.map(a => [new Date(a.t).toISOString(), a.sym, a.kind, a.side, a.price, a.score, a.reason,
+    a.r1, a.oi1, a.cvd, a.fund, a.e1 ?? '', a.e4 ?? '', a.plan?.sl ?? '', a.plan?.tp ?? '', a.plan?.lev ?? '',
+    a.po?.out ?? '', a.po?.pct ?? '', a.po?.r ?? ''].map(x => `"${String(x).replace(/"/g,'""')}"`).join(','));
+  const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], {type: 'text/csv'});
+  const url = URL.createObjectURL(blob), el = document.createElement('a');
+  el.href = url; el.download = 'alerts_' + new Date().toISOString().slice(0,10) + '.csv'; el.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  applyWake();
+  if (!scanning && Date.now() > nextAt + 30e3) scan();   // 手機回到前景時補掃
+});
+setInterval(setStatus, 1000);
+
+['longList', 'shortList', 'alertList'].forEach(id => bindRowToggle($(id)));
+fillForm(); renderAlerts(); renderStats(); scan();
+</script>
+</body>
+</html>
